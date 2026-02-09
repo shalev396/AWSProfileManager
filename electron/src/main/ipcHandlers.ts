@@ -39,9 +39,17 @@ export interface AddAccountData {
 }
 
 let trayUpdateCallback: (() => void) | null = null;
+let mainWindowRef: BrowserWindow | null = null;
 
 export function setTrayUpdateCallback(callback: () => void): void {
   trayUpdateCallback = callback;
+}
+
+/** Notify the renderer that accounts/active profile changed (e.g. from tray) so UI can refresh. */
+export function notifyRendererStateChanged(): void {
+  if (mainWindowRef && !mainWindowRef.isDestroyed()) {
+    mainWindowRef.webContents.send("app:stateChanged");
+  }
 }
 
 function validateProfileName(profileName: string): void {
@@ -67,6 +75,8 @@ function validateSecretKey(secretAccessKey: string): void {
 }
 
 export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
+  mainWindowRef = mainWindow;
+
   // Open file dialog to select an image (for account logo)
   ipcMain.handle("dialog:selectImage", async () => {
     const parentWindow = mainWindow ?? BrowserWindow.getFocusedWindow();
@@ -214,10 +224,9 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
 
         await accountsStore.addAccount(account);
 
-        // Update tray
-        if (trayUpdateCallback) {
-          trayUpdateCallback();
-        }
+        // Update tray and notify renderer so UI stays in sync
+        if (trayUpdateCallback) trayUpdateCallback();
+        notifyRendererStateChanged();
 
         return { success: true };
       } catch (error: any) {
@@ -284,10 +293,9 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
           output: accountData.output,
         });
 
-        // Update tray
-        if (trayUpdateCallback) {
-          trayUpdateCallback();
-        }
+        // Update tray and notify renderer
+        if (trayUpdateCallback) trayUpdateCallback();
+        notifyRendererStateChanged();
 
         return { success: true };
       } catch (error: any) {
@@ -303,10 +311,9 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
       await accountsStore.removeAccount(profileName);
       await accountsStore.removeStoredLogo(profileName);
 
-      // Update tray
-      if (trayUpdateCallback) {
-        trayUpdateCallback();
-      }
+      // Update tray and notify renderer
+      if (trayUpdateCallback) trayUpdateCallback();
+      notifyRendererStateChanged();
 
       return { success: true };
     } catch (error: any) {
@@ -323,10 +330,9 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
       // Update app metadata
       await accountsStore.setActiveProfile(profileName);
 
-      // Update tray
-      if (trayUpdateCallback) {
-        trayUpdateCallback();
-      }
+      // Update tray and notify renderer so UI reflects tray switch
+      if (trayUpdateCallback) trayUpdateCallback();
+      notifyRendererStateChanged();
 
       // Try to verify the switch (optional, don't fail if aws CLI not available)
       try {

@@ -53,7 +53,14 @@
     },
     "win": {
       "icon": "assets/icon.png",
-      "target": ["nsis"]
+      "target": ["nsis"],
+      "publisherName": "Shalev Ben Moshe",
+      "publisherNameIsAuthor": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "AWS Profile Manager"
     },
     "linux": {
       "icon": "assets/icon.png",

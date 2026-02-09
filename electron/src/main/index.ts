@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { ensureAwsDir } from './awsFiles';
 import { loadAccounts } from './accountsStore';
-import { setupIpcHandlers, setTrayUpdateCallback } from './ipcHandlers';
+import { setupIpcHandlers, setTrayUpdateCallback, notifyRendererStateChanged } from './ipcHandlers';
 import { TrayManager } from './trayManager';
 
 let mainWindow: BrowserWindow | null = null;
@@ -83,6 +83,8 @@ async function updateTray(): Promise<void> {
           'AWS Profile Switched',
           `Active profile: ${displayName}`
         );
+        // So the open Manage window refreshes when user switched from tray
+        notifyRendererStateChanged();
       } catch (error: any) {
         trayManager?.showNotification(
           'Error',
@@ -139,6 +141,7 @@ app.whenReady().then(async () => {
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
+        setupIpcHandlers(mainWindow);
       }
     });
   } catch (error) {

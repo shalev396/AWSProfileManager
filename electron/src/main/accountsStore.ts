@@ -17,19 +17,29 @@ export interface AppData {
 
 let cachedAppData: AppData | null = null;
 
+/**
+ * Resolves app data directory using OS/env only (no hardcoded "Users" etc.),
+ * so localized Windows (e.g. Hebrew "משתמשים") and other locales work correctly.
+ */
 export function getAppDataPath(): string {
   const platform = os.platform();
   let appDataDir: string;
-  
+
   if (platform === 'darwin') {
     appDataDir = path.join(os.homedir(), 'Library', 'Application Support', 'aws-profile-manager');
   } else if (platform === 'win32') {
-    appDataDir = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'aws-profile-manager');
+    // Use APPDATA/USERPROFILE so we never rely on folder names like "Users" (localized names differ).
+    const appDataBase =
+      process.env.APPDATA ||
+      (process.env.USERPROFILE
+        ? path.join(process.env.USERPROFILE, 'AppData', 'Roaming')
+        : path.join(os.homedir(), 'AppData', 'Roaming'));
+    appDataDir = path.join(appDataBase, 'aws-profile-manager');
   } else {
     // Linux and others
     appDataDir = path.join(os.homedir(), '.config', 'aws-profile-manager');
   }
-  
+
   return path.join(appDataDir, 'accounts.json');
 }
 
