@@ -32,6 +32,8 @@ export interface ElectronAPI {
     }>;
     openDataFolder: () => Promise<void>;
     getLogoDataUrl: (logoPath: string) => Promise<string | null>;
+    /** Subscribe to account/active-profile changes (e.g. from tray). Call returned function to unsubscribe. */
+    onStateChanged: (callback: () => void) => () => void;
   };
 }
 
@@ -59,6 +61,11 @@ const api: ElectronAPI = {
     openDataFolder: () => ipcRenderer.invoke("app:openDataFolder"),
     getLogoDataUrl: (logoPath) =>
       ipcRenderer.invoke("app:getLogoDataUrl", logoPath),
+    onStateChanged: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on("app:stateChanged", handler);
+      return () => ipcRenderer.removeListener("app:stateChanged", handler);
+    },
   },
 };
 

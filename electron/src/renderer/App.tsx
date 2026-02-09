@@ -47,6 +47,13 @@ const App: React.FC = () => {
     loadData();
   }, []);
 
+  // When user switches profile (or changes accounts) from the tray, refresh UI
+  useEffect(() => {
+    const unsubscribe =
+      window.electron?.app?.onStateChanged?.(() => loadData());
+    return () => unsubscribe?.();
+  }, []);
+
   const handleAddAccount = () => {
     setFormMode("add");
     setEditingAccount(undefined);
