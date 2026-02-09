@@ -54,8 +54,7 @@
     "win": {
       "icon": "assets/icon.png",
       "target": ["nsis"],
-      "publisherName": "Shalev Ben Moshe",
-      "publisherNameIsAuthor": true
+      "publisherName": "Shalev Ben Moshe"
     },
     "nsis": {
       "oneClick": false,
