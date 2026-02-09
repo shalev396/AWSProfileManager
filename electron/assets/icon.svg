@@ -1,0 +1,10 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient x1="0%" y1="100%" x2="100%" y2="0%" id="route53-bg">
+      <stop stop-color="#4D27A8" offset="0%"/>
+      <stop stop-color="#A166FF" offset="100%"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#route53-bg)"/>
+  <text x="256" y="300" font-family="system-ui, -apple-system, sans-serif" font-size="120" font-weight="bold" fill="#FFFFFF" text-anchor="middle">AWS</text>
+</svg>

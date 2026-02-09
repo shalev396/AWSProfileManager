@@ -1,0 +1,66 @@
+{
+  "name": "aws-profile-manager",
+  "version": "1.0.0",
+  "description": "Desktop app to manage and switch AWS CLI profiles",
+  "main": "out/main/index.js",
+  "author": "Shalev",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "start": "electron-vite preview",
+    "package:mac": "npm run build && electron-builder --mac",
+    "package:win": "npm run build && electron-builder --win",
+    "package:linux": "npm run build && electron-builder --linux",
+    "package": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "ini": "^4.1.1"
+  },
+  "devDependencies": {
+    "@types/ini": "^4.1.1",
+    "@types/node": "^20.11.5",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^28.2.0",
+    "electron-builder": "^24.9.1",
+    "electron-vite": "^2.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12"
+  },
+  "build": {
+    "appId": "com.shalev.aws-profile-manager",
+    "productName": "AWS Profile Manager",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out",
+      "assets/icon.png"
+    ],
+    "mac": {
+      "icon": "assets/icon.png",
+      "category": "public.app-category.developer-tools",
+      "target": ["dmg"],
+      "extendInfo": {
+        "CFBundleName": "AWS Profile Manager",
+        "CFBundleDisplayName": "AWS Profile Manager"
+      }
+    },
+    "win": {
+      "icon": "assets/icon.png",
+      "target": ["nsis"]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": ["AppImage"],
+      "category": "Development",
+      "maintainer": "Shalev",
+      "synopsis": "Manage and switch AWS CLI profiles"
+    }
+  }
+}
