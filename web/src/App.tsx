@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { RefreshCw, Palette, Lock, Zap } from "lucide-react";
 import { downloads } from "./config";
 
+
 function App() {
   const [detectedPlatform, setDetectedPlatform] = useState<string | null>(null);
 
@@ -20,6 +21,8 @@ function App() {
             src="/logo.png"
             alt="AWS Profile Manager"
             className="header-logo"
+            width={36}
+            height={36}
           />
           <h1>AWS Profile Manager</h1>
         </nav>
@@ -28,7 +31,14 @@ function App() {
       <main>
         <section className="hero">
           <div className="container">
-            <img src="/logo.png" alt="" className="hero-logo" aria-hidden />
+            <img
+              src="/logo.png"
+              alt=""
+              className="hero-logo"
+              aria-hidden
+              width={96}
+              height={96}
+            />
             <h2>Download for your platform</h2>
             <p className="tagline">
               Switch AWS profiles from your system tray—no{" "}
@@ -48,54 +58,13 @@ function App() {
                 >
                   <div className="platform-icon">
                     {download.platform === "mac" && (
-                      <svg
-                        width="80"
-                        height="80"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <rect
-                          x="3"
-                          y="3"
-                          width="18"
-                          height="18"
-                          rx="2"
-                          ry="2"
-                        />
-                        <line x1="9" y1="9" x2="15" y2="9" />
-                        <line x1="9" y1="15" x2="15" y2="15" />
-                      </svg>
+                      <img src="/apple.svg" alt="" width={80} height={80} aria-hidden />
                     )}
                     {download.platform === "windows" && (
-                      <svg
-                        width="80"
-                        height="80"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <rect x="3" y="3" width="7" height="7" />
-                        <rect x="14" y="3" width="7" height="7" />
-                        <rect x="14" y="14" width="7" height="7" />
-                        <rect x="3" y="14" width="7" height="7" />
-                      </svg>
+                      <img src="/windows.svg" alt="" width={80} height={80} aria-hidden />
                     )}
                     {download.platform === "linux" && (
-                      <svg
-                        width="80"
-                        height="80"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                      </svg>
+                      <img src="/linux.svg" alt="" width={80} height={80} aria-hidden />
                     )}
                   </div>
                   <h4>
