@@ -1,45 +1,57 @@
-# AWS Profile Manager
+# AWS Profile Manager (Desktop App)
 
-Desktop app to manage AWS CLI profiles. Switch between multiple AWS accounts from your system tray without using `--profile` flags. Manages credentials in standard `~/.aws` files and lets you set a custom logo per account.
+Desktop app to manage AWS CLI profiles. Switch between multiple AWS accounts from your system tray.
 
-**Supported operating systems:** Windows, macOS (Intel and Apple Silicon), and Linux.
+**Supported:** Windows, macOS (Intel and Apple Silicon), Linux.
 
-## How to install
+## Install
 
-- **Node.js 18+** required ([download](https://nodejs.org/)).
-- Install dependencies and run:
-  ```bash
-  npm install
-  npm run dev
-  ```
-- Platform-specific notes (run, tray location, build) are below.
+You can install the app from here:
 
----
+- **Releases / download page:** [Install AWS Profile Manager](https://awsprofilemanager.shalev396.com)
 
-- [Windows](#windows)
-- [macOS](#macos)
-- [Linux](#linux)
+Pick the installer for your OS: Windows (`.exe`), macOS (`.dmg`), or Linux (`.AppImage`).
+
+## Run locally (development)
+
+**Prerequisites:** Node.js 18+ ([download](https://nodejs.org/)).
+
+```bash
+npm install
+npm run dev
+```
+
+The app appears in the system tray (Windows: bottom right; macOS: menu bar top right). Click the tray icon → **Manage Accounts…** to add or edit profiles.
+
+## Using the app
+
+- **Switch profile:** Click the tray icon and choose an account.
+- **Add or edit accounts:** Tray icon → **Manage Accounts…**
+- **Data location:** Shown at the bottom of the Manage window; you can open that folder from the app.
+- **AWS files:** Credentials and config are in `~/.aws` (macOS/Linux) or `%USERPROFILE%\.aws` (Windows). Backups (`.bak`) are created before changes.
 
 ### Windows
 
-1. Run `npm run dev`. The app appears in the **system tray** (bottom right).
-2. Click the tray icon → **Manage Accounts…** to add or edit profiles.
-3. To build an installer: `npm run package:win` → `dist/AWS Profile Manager Setup.exe`.
+Tray is bottom right. Credentials in `%USERPROFILE%\.aws\`.
 
 ### macOS
 
-1. Run `npm run dev`. The app appears in the **menu bar** (top right). Closing the window only hides it; use the tray icon → **Manage Accounts…** to open again.
-2. To build: `npm run package:mac` → `dist/AWS Profile Manager.dmg`. The Dock shows "AWS Profile Manager" when using the built app.
+Tray is menu bar (top right). Closing the window only hides the app; use the tray to reopen. Credentials in `~/.aws/`. You may need to allow the app in **System Preferences → Security & Privacy**.
 
 ### Linux
 
-1. Run `npm run dev`. The app uses the system tray if your environment supports it.
-2. App data: `~/.config/aws-profile-manager/` (accounts and logos).
-3. AWS files: `~/.aws/credentials` and `~/.aws/config`.
+Uses system tray if supported. App data: `~/.config/aws-profile-manager/`. For AppImage: `chmod +x AWS-Profile-Manager*.AppImage` then run it.
 
----
+## Updating
 
-**Data and AWS files**
+Download the latest installer and run it. No need to uninstall first; the installer will upgrade the existing install.
 
-- App data (accounts, logos): see **Data location** at the bottom of the app window; you can open that folder from the app.
-- AWS credentials and config are in `~/.aws` (macOS/Linux) or `%USERPROFILE%\.aws` (Windows). Backups (`.bak`) are created before changes.
+## Build installers (optional)
+
+```bash
+npm run package:mac    # macOS .dmg
+npm run package:win   # Windows .exe
+npm run package:linux # Linux .AppImage
+```
+
+Output is in `dist/`.
