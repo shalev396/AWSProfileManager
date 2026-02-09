@@ -1,0 +1,191 @@
+name: Build and Deploy Electron Apps
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION  }}
+  STACK_NAME: ${{ secrets.STACK_NAME }}
+
+jobs:
+  build-mac:
+    name: Build macOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./electron
+        run: npm ci
+
+      - name: Build Electron app
+        working-directory: ./electron
+        run: npm run build
+
+      - name: Package for macOS
+        working-directory: ./electron
+        run: npm run package:mac
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/my-github-actions-role
+
+      - name: Get S3 Bucket Name
+        id: s3
+        run: |
+          S3_BUCKET=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='BinariesBucketName'].OutputValue" --output text)
+          echo "bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
+
+      - name: Remove existing file (so new upload replaces old version)
+        run: |
+          aws s3 rm s3://${{ steps.s3.outputs.bucket }}/downloads/mac/AWS-Profile-Manager.dmg || true
+
+      - name: Upload to S3
+        working-directory: ./electron
+        run: |
+          DMG=$(ls dist/*.dmg 2>/dev/null | head -1)
+          aws s3 cp "$DMG" s3://${{ steps.s3.outputs.bucket }}/downloads/mac/AWS-Profile-Manager.dmg \
+            --content-type "application/octet-stream"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: electron/dist/*.dmg
+          retention-days: 30
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./electron
+        run: npm ci
+
+      - name: Build Electron app
+        working-directory: ./electron
+        run: npm run build
+
+      - name: Package for Windows
+        working-directory: ./electron
+        run: npm run package:win
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/my-github-actions-role
+
+      - name: Get S3 Bucket Name
+        id: s3
+        shell: bash
+        run: |
+          S3_BUCKET=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='BinariesBucketName'].OutputValue" --output text)
+          echo "bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
+
+      - name: Remove existing file (so new upload replaces old version)
+        shell: bash
+        run: |
+          aws s3 rm s3://${{ steps.s3.outputs.bucket }}/downloads/win/AWS-Profile-Manager-Setup.exe || true
+
+      - name: Upload to S3
+        working-directory: ./electron
+        shell: bash
+        run: |
+          EXE=$(ls dist/*.exe 2>/dev/null | head -1)
+          aws s3 cp "$EXE" s3://${{ steps.s3.outputs.bucket }}/downloads/win/AWS-Profile-Manager-Setup.exe \
+            --content-type "application/octet-stream"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: electron/dist/*.exe
+          retention-days: 30
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./electron
+        run: npm ci
+
+      - name: Build Electron app
+        working-directory: ./electron
+        run: npm run build
+
+      - name: Package for Linux
+        working-directory: ./electron
+        run: npm run package:linux
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/my-github-actions-role
+
+      - name: Get S3 Bucket Name
+        id: s3
+        run: |
+          S3_BUCKET=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='BinariesBucketName'].OutputValue" --output text)
+          echo "bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
+
+      - name: Remove existing file (so new upload replaces old version)
+        run: |
+          aws s3 rm s3://${{ steps.s3.outputs.bucket }}/downloads/linux/AWS-Profile-Manager.AppImage || true
+
+      - name: Upload to S3
+        working-directory: ./electron
+        run: |
+          APPIMAGE=$(ls dist/*.AppImage 2>/dev/null | head -1)
+          aws s3 cp "$APPIMAGE" s3://${{ steps.s3.outputs.bucket }}/downloads/linux/AWS-Profile-Manager.AppImage \
+            --content-type "application/octet-stream"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: electron/dist/*.AppImage
+          retention-days: 30
+
