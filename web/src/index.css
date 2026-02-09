@@ -256,7 +256,7 @@ footer {
 footer p { margin-bottom: 8px; opacity: 0.9; font-size: 14px; }
 
 footer a {
-  color: var(--purple-400);
+  color: #e9d5ff;
   text-decoration: none;
   margin: 0 8px;
 }
