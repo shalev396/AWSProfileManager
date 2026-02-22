@@ -2,12 +2,20 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 
+export type AuthType = 'access-key' | 'sso';
+
 export interface Account {
   profileName: string;
+  authType: AuthType;
   displayName?: string;
   logoPath?: string;
   region?: string;
   output?: string;
+  ssoStartUrl?: string;
+  ssoAccountId?: string;
+  ssoRoleName?: string;
+  ssoRegion?: string;
+  ssoSessionName?: string;
 }
 
 export interface AppData {
@@ -103,6 +111,19 @@ export async function loadAccounts(): Promise<AppData> {
   try {
     const content = await fs.readFile(appDataPath, 'utf-8');
     cachedAppData = JSON.parse(content);
+
+    // Migration: default authType to 'access-key' for existing profiles
+    let migrated = false;
+    for (const account of cachedAppData!.accounts) {
+      if (!account.authType) {
+        account.authType = 'access-key';
+        migrated = true;
+      }
+    }
+    if (migrated) {
+      await saveAccounts(cachedAppData!);
+    }
+
     return cachedAppData!;
   } catch (error: any) {
     if (error.code === 'ENOENT') {

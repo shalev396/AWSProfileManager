@@ -5,7 +5,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as awsFiles from "./awsFiles";
 import * as accountsStore from "./accountsStore";
-import { Account } from "./accountsStore";
+import { Account, AuthType } from "./accountsStore";
 
 const execAsync = promisify(exec);
 
@@ -30,8 +30,14 @@ function getExecEnv(): NodeJS.ProcessEnv {
 
 export interface AddAccountData {
   profileName: string;
+  authType: AuthType;
   accessKeyId: string;
   secretAccessKey: string;
+  ssoStartUrl?: string;
+  ssoAccountId?: string;
+  ssoRoleName?: string;
+  ssoRegion?: string;
+  ssoSessionName?: string;
   region: string;
   output: string;
   logoPath?: string;
@@ -184,23 +190,40 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
     async (_event, accountData: AddAccountData) => {
       try {
         validateProfileName(accountData.profileName);
-        validateAccessKey(accountData.accessKeyId);
-        validateSecretKey(accountData.secretAccessKey);
+        const authType = accountData.authType || 'access-key';
 
-        // Write to AWS files
-        await awsFiles.upsertProfileCredentials(
-          accountData.profileName,
-          accountData.accessKeyId,
-          accountData.secretAccessKey,
-        );
+        if (authType === 'sso') {
+          if (!accountData.ssoStartUrl || !accountData.ssoAccountId || !accountData.ssoRoleName) {
+            throw new Error("SSO Start URL, Account ID, and Role Name are required");
+          }
+          const ssoSessionName = accountData.ssoSessionName || `${accountData.profileName}-session`;
+          await awsFiles.upsertSsoProfileConfig({
+            profileName: accountData.profileName,
+            ssoSessionName,
+            ssoAccountId: accountData.ssoAccountId,
+            ssoRoleName: accountData.ssoRoleName,
+            ssoStartUrl: accountData.ssoStartUrl,
+            ssoRegion: accountData.ssoRegion || accountData.region || "us-east-1",
+            region: accountData.region || "us-east-1",
+            output: accountData.output || "json",
+          });
+        } else {
+          validateAccessKey(accountData.accessKeyId);
+          validateSecretKey(accountData.secretAccessKey);
 
-        await awsFiles.upsertProfileConfig(
-          accountData.profileName,
-          accountData.region || "il-central-1",
-          accountData.output || "json",
-        );
+          await awsFiles.upsertProfileCredentials(
+            accountData.profileName,
+            accountData.accessKeyId,
+            accountData.secretAccessKey,
+          );
 
-        // Copy logo into app storage so it survives e.g. Downloads being cleared
+          await awsFiles.upsertProfileConfig(
+            accountData.profileName,
+            accountData.region || "us-east-1",
+            accountData.output || "json",
+          );
+        }
+
         let storedLogoPath: string | undefined;
         if (accountData.logoPath) {
           try {
@@ -213,18 +236,24 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
           }
         }
 
-        // Add to app metadata (without secrets)
         const account: Account = {
           profileName: accountData.profileName,
+          authType,
           displayName: accountData.displayName,
           logoPath: storedLogoPath,
           region: accountData.region,
           output: accountData.output,
+          ...(authType === 'sso' ? {
+            ssoStartUrl: accountData.ssoStartUrl,
+            ssoAccountId: accountData.ssoAccountId,
+            ssoRoleName: accountData.ssoRoleName,
+            ssoRegion: accountData.ssoRegion,
+            ssoSessionName: accountData.ssoSessionName || `${accountData.profileName}-session`,
+          } : {}),
         };
 
         await accountsStore.addAccount(account);
 
-        // Update tray and notify renderer so UI stays in sync
         if (trayUpdateCallback) trayUpdateCallback();
         notifyRendererStateChanged();
 
@@ -241,35 +270,50 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
     async (_event, accountData: AddAccountData) => {
       try {
         validateProfileName(accountData.profileName);
+        const authType = accountData.authType || 'access-key';
 
-        // Update AWS credentials: use new secret if provided, else keep existing
-        if (accountData.accessKeyId) {
-          validateAccessKey(accountData.accessKeyId);
-          let secret = accountData.secretAccessKey;
-          if (!secret || secret.trim() === "") {
-            const existing = await awsFiles.getProfileCredentials(
-              accountData.profileName,
-            );
-            secret = existing?.secretAccessKey ?? "";
+        if (authType === 'sso') {
+          if (!accountData.ssoStartUrl || !accountData.ssoAccountId || !accountData.ssoRoleName) {
+            throw new Error("SSO Start URL, Account ID, and Role Name are required");
           }
-          if (secret) {
-            validateSecretKey(secret);
-            await awsFiles.upsertProfileCredentials(
-              accountData.profileName,
-              accountData.accessKeyId,
-              secret,
-            );
+          const ssoSessionName = accountData.ssoSessionName || `${accountData.profileName}-session`;
+          await awsFiles.upsertSsoProfileConfig({
+            profileName: accountData.profileName,
+            ssoSessionName,
+            ssoAccountId: accountData.ssoAccountId,
+            ssoRoleName: accountData.ssoRoleName,
+            ssoStartUrl: accountData.ssoStartUrl,
+            ssoRegion: accountData.ssoRegion || accountData.region || "us-east-1",
+            region: accountData.region || "us-east-1",
+            output: accountData.output || "json",
+          });
+        } else {
+          if (accountData.accessKeyId) {
+            validateAccessKey(accountData.accessKeyId);
+            let secret = accountData.secretAccessKey;
+            if (!secret || secret.trim() === "") {
+              const existing = await awsFiles.getProfileCredentials(
+                accountData.profileName,
+              );
+              secret = existing?.secretAccessKey ?? "";
+            }
+            if (secret) {
+              validateSecretKey(secret);
+              await awsFiles.upsertProfileCredentials(
+                accountData.profileName,
+                accountData.accessKeyId,
+                secret,
+              );
+            }
           }
+
+          await awsFiles.upsertProfileConfig(
+            accountData.profileName,
+            accountData.region || "us-east-1",
+            accountData.output || "json",
+          );
         }
 
-        // Update config
-        await awsFiles.upsertProfileConfig(
-          accountData.profileName,
-          accountData.region || "il-central-1",
-          accountData.output || "json",
-        );
-
-        // Copy or clear logo in app storage
         let storedLogoPath: string | undefined;
         if (accountData.logoPath) {
           try {
@@ -285,15 +329,27 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
           storedLogoPath = undefined;
         }
 
-        // Update app metadata
         await accountsStore.updateAccount(accountData.profileName, {
+          authType,
           displayName: accountData.displayName,
           logoPath: storedLogoPath,
           region: accountData.region,
           output: accountData.output,
+          ...(authType === 'sso' ? {
+            ssoStartUrl: accountData.ssoStartUrl,
+            ssoAccountId: accountData.ssoAccountId,
+            ssoRoleName: accountData.ssoRoleName,
+            ssoRegion: accountData.ssoRegion,
+            ssoSessionName: accountData.ssoSessionName || `${accountData.profileName}-session`,
+          } : {
+            ssoStartUrl: undefined,
+            ssoAccountId: undefined,
+            ssoRoleName: undefined,
+            ssoRegion: undefined,
+            ssoSessionName: undefined,
+          }),
         });
 
-        // Update tray and notify renderer
         if (trayUpdateCallback) trayUpdateCallback();
         notifyRendererStateChanged();
 
@@ -382,6 +438,30 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
         success: false,
         error: error.message || "Failed to verify credentials",
       };
+    }
+  });
+
+  // SSO Login - triggers browser-based auth
+  ipcMain.handle("accounts:ssoLogin", async (_event, profileName: string) => {
+    try {
+      const cmd = `aws sso login --profile ${profileName}`;
+      await execAsync(cmd, { env: getExecEnv(), timeout: 120000 });
+      return { success: true };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || "SSO login failed",
+      };
+    }
+  });
+
+  // Get SSO config for a profile (for edit form)
+  ipcMain.handle("accounts:getSsoConfig", async (_event, profileName: string) => {
+    try {
+      const config = await awsFiles.getSsoProfileConfig(profileName);
+      return { success: true, data: config };
+    } catch (error: any) {
+      return { success: false, error: error.message };
     }
   });
 }
