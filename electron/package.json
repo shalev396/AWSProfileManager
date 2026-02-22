@@ -41,6 +41,7 @@
     "directories": {
       "output": "dist"
     },
+    "afterSign": "notarize.cjs",
     "files": [
       "out",
       "assets/icon.png"
@@ -53,9 +54,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": {
-        "teamId": "${env.APPLE_TEAM_ID}"
-      },
+      "notarize": false,
       "extendInfo": {
         "CFBundleName": "AWS Profile Manager",
         "CFBundleDisplayName": "AWS Profile Manager"
