@@ -18,6 +18,9 @@
   "dependencies": {
     "ini": "^4.1.1"
   },
+  "overrides": {
+    "@electron/notarize": "2.3.2"
+  },
   "devDependencies": {
     "@types/ini": "^4.1.1",
     "@types/node": "^20.11.5",
