@@ -28,6 +28,7 @@ interface AccountListProps {
   onDelete: (profileName: string) => void;
   onAdd: () => void;
   onRefresh: () => void;
+  onSsoLogin: (profileName: string) => void;
 }
 
 const AccountList: React.FC<AccountListProps> = ({
@@ -38,6 +39,7 @@ const AccountList: React.FC<AccountListProps> = ({
   onDelete,
   onAdd,
   onRefresh,
+  onSsoLogin,
 }) => {
   return (
     <div style={styles.container}>
@@ -78,9 +80,20 @@ const AccountList: React.FC<AccountListProps> = ({
                   />
                 )}
                 <div style={styles.cardContent}>
-                  <h3 style={styles.cardTitle}>
-                    {account.displayName || account.profileName}
-                  </h3>
+                  <div style={styles.cardHeader}>
+                    <h3 style={styles.cardTitle}>
+                      {account.displayName || account.profileName}
+                    </h3>
+                    <span
+                      style={
+                        account.authType === "sso"
+                          ? styles.authBadgeSso
+                          : styles.authBadgeKey
+                      }
+                    >
+                      {account.authType === "sso" ? "🔗 SSO" : "🔑 Key"}
+                    </span>
+                  </div>
                   <p style={styles.cardSubtitle}>{account.profileName}</p>
                   {account.region && (
                     <p style={styles.cardDetail}>Region: {account.region}</p>
@@ -94,6 +107,14 @@ const AccountList: React.FC<AccountListProps> = ({
                       onClick={() => onSetActive(account.profileName)}
                     >
                       Set Active
+                    </button>
+                  )}
+                  {account.authType === "sso" && (
+                    <button
+                      style={styles.actionButtonSso}
+                      onClick={() => onSsoLogin(account.profileName)}
+                    >
+                      SSO Login
                     </button>
                   )}
                   <button
@@ -216,11 +237,43 @@ const styles = {
   cardContent: {
     marginBottom: "16px",
   } as React.CSSProperties,
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "8px",
+  } as React.CSSProperties,
   cardTitle: {
     fontSize: "18px",
     fontWeight: 600,
     color: purple.text,
     marginBottom: "4px",
+  } as React.CSSProperties,
+  authBadgeKey: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
+    padding: "3px 8px",
+    background: "#f3f4f6",
+    color: "#4b5563",
+    fontSize: "11px",
+    fontWeight: 600,
+    borderRadius: "6px",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  } as React.CSSProperties,
+  authBadgeSso: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
+    padding: "3px 8px",
+    background: "#dbeafe",
+    color: "#1d4ed8",
+    fontSize: "11px",
+    fontWeight: 600,
+    borderRadius: "6px",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
   } as React.CSSProperties,
   cardSubtitle: {
     fontSize: "14px",
@@ -264,6 +317,17 @@ const styles = {
     background: purple.bg,
     color: purple.text,
     border: `1px solid ${purple.border}`,
+    borderRadius: "6px",
+    fontSize: "13px",
+    fontWeight: 600,
+    cursor: "pointer",
+  } as React.CSSProperties,
+  actionButtonSso: {
+    flex: 1,
+    padding: "8px 16px",
+    background: "#2563eb",
+    color: "#fff",
+    border: "none",
     borderRadius: "6px",
     fontSize: "13px",
     fontWeight: 600,

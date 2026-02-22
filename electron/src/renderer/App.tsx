@@ -49,8 +49,9 @@ const App: React.FC = () => {
 
   // When user switches profile (or changes accounts) from the tray, refresh UI
   useEffect(() => {
-    const unsubscribe =
-      window.electron?.app?.onStateChanged?.(() => loadData());
+    const unsubscribe = window.electron?.app?.onStateChanged?.(() =>
+      loadData(),
+    );
     return () => unsubscribe?.();
   }, []);
 
@@ -120,6 +121,23 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSsoLogin = async (profileName: string) => {
+    try {
+      alert(
+        `Opening browser for SSO login (${profileName})...\nPlease complete the authentication in your browser.`,
+      );
+      const result = await window.electron.accounts.ssoLogin(profileName);
+
+      if (result.success) {
+        alert(`SSO login successful for ${profileName}`);
+      } else {
+        alert(`SSO login failed: ${result.error}`);
+      }
+    } catch (error: any) {
+      alert(`SSO login error: ${error.message}`);
+    }
+  };
+
   const handleRefresh = () => {
     loadData();
   };
@@ -153,6 +171,7 @@ const App: React.FC = () => {
           onDelete={handleDeleteAccount}
           onAdd={handleAddAccount}
           onRefresh={handleRefresh}
+          onSsoLogin={handleSsoLogin}
         />
         {dataPaths && (
           <div style={styles.dataLocation}>

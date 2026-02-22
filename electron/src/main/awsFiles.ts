@@ -111,53 +111,181 @@ export async function upsertProfileConfig(
   await writeIniAtomic(config, data);
 }
 
+export interface SsoProfileParams {
+  profileName: string;
+  ssoSessionName: string;
+  ssoAccountId: string;
+  ssoRoleName: string;
+  ssoStartUrl: string;
+  ssoRegion: string;
+  region: string;
+  output: string;
+}
+
+export async function upsertSsoProfileConfig(params: SsoProfileParams): Promise<void> {
+  const { config } = getAwsPaths();
+  const data = await readIni(config);
+
+  const sectionName = params.profileName === 'default' ? 'default' : `profile ${params.profileName}`;
+
+  data[sectionName] = {
+    sso_session: params.ssoSessionName,
+    sso_account_id: params.ssoAccountId,
+    sso_role_name: params.ssoRoleName,
+    region: params.region,
+    output: params.output
+  };
+
+  const ssoSessionSection = `sso-session ${params.ssoSessionName}`;
+  data[ssoSessionSection] = {
+    sso_start_url: params.ssoStartUrl,
+    sso_region: params.ssoRegion,
+    sso_registration_scopes: 'sso:account:access'
+  };
+
+  await writeIniAtomic(config, data);
+}
+
+export async function getProfileAuthType(profileName: string): Promise<'access-key' | 'sso'> {
+  const { config } = getAwsPaths();
+  const configData = await readIni(config);
+  const sectionName = `profile ${profileName}`;
+  const section = configData[sectionName] || configData[profileName];
+  if (section && section.sso_session) {
+    return 'sso';
+  }
+  return 'access-key';
+}
+
+export interface SsoConfigResult {
+  ssoSessionName: string;
+  ssoAccountId: string;
+  ssoRoleName: string;
+  ssoStartUrl: string;
+  ssoRegion: string;
+  region: string;
+  output: string;
+}
+
+export async function getSsoProfileConfig(profileName: string): Promise<SsoConfigResult | null> {
+  const { config } = getAwsPaths();
+  const configData = await readIni(config);
+  const sectionName = `profile ${profileName}`;
+  const section = configData[sectionName] || configData[profileName];
+  if (!section || !section.sso_session) {
+    return null;
+  }
+
+  const ssoSessionSection = `sso-session ${section.sso_session}`;
+  const ssoSession = configData[ssoSessionSection] || {};
+
+  return {
+    ssoSessionName: section.sso_session,
+    ssoAccountId: section.sso_account_id || '',
+    ssoRoleName: section.sso_role_name || '',
+    ssoStartUrl: ssoSession.sso_start_url || '',
+    ssoRegion: ssoSession.sso_region || '',
+    region: section.region || '',
+    output: section.output || 'json'
+  };
+}
+
 export async function setDefaultFromProfile(profileName: string): Promise<void> {
   const { credentials, config } = getAwsPaths();
-  
-  // Read source profile credentials
-  const credData = await readIni(credentials);
-  if (!credData[profileName]) {
-    throw new Error(`Profile "${profileName}" not found in credentials file`);
+  const authType = await getProfileAuthType(profileName);
+
+  if (authType === 'sso') {
+    // SSO: copy config with SSO fields to [default], remove stale credentials
+    const configData = await readIni(config);
+    const configSectionName = `profile ${profileName}`;
+    const section = configData[configSectionName] || configData[profileName];
+    if (section) {
+      configData['default'] = { ...section };
+    }
+    await writeIniAtomic(config, configData);
+
+    // Remove [default] from credentials so stale access keys don't take precedence
+    const credData = await readIni(credentials);
+    if (credData['default']) {
+      delete credData['default'];
+      await writeIniAtomic(credentials, credData);
+    }
+  } else {
+    // Access Key: existing behavior
+    const credData = await readIni(credentials);
+    if (!credData[profileName]) {
+      throw new Error(`Profile "${profileName}" not found in credentials file`);
+    }
+
+    credData['default'] = { ...credData[profileName] };
+    await writeIniAtomic(credentials, credData);
+
+    const configData = await readIni(config);
+    const configSectionName = `profile ${profileName}`;
+
+    if (configData[configSectionName]) {
+      configData['default'] = { ...configData[configSectionName] };
+    } else if (configData[profileName]) {
+      configData['default'] = { ...configData[profileName] };
+    }
+
+    await writeIniAtomic(config, configData);
   }
-  
-  // Copy to [default]
-  credData['default'] = { ...credData[profileName] };
-  await writeIniAtomic(credentials, credData);
-  
-  // Read source profile config
-  const configData = await readIni(config);
-  const configSectionName = `profile ${profileName}`;
-  
-  if (configData[configSectionName]) {
-    configData['default'] = { ...configData[configSectionName] };
-  } else if (configData[profileName]) {
-    // Fallback: some configs might use profileName directly
-    configData['default'] = { ...configData[profileName] };
-  }
-  
-  await writeIniAtomic(config, configData);
 }
 
 export async function listProfiles(): Promise<string[]> {
-  const { credentials } = getAwsPaths();
-  const data = await readIni(credentials);
-  
-  return Object.keys(data).filter(key => key !== 'default');
+  const { credentials, config } = getAwsPaths();
+  const credData = await readIni(credentials);
+  const configData = await readIni(config);
+
+  const profiles = new Set<string>();
+
+  // Profiles from credentials file
+  for (const key of Object.keys(credData)) {
+    if (key !== 'default') profiles.add(key);
+  }
+
+  // SSO profiles from config file (sections starting with "profile ")
+  for (const key of Object.keys(configData)) {
+    if (key.startsWith('profile ')) {
+      const name = key.slice('profile '.length);
+      if (configData[key].sso_session) {
+        profiles.add(name);
+      }
+    }
+  }
+
+  return Array.from(profiles);
 }
 
 export async function deleteProfile(profileName: string): Promise<void> {
   const { credentials, config } = getAwsPaths();
-  
-  // Remove from credentials
-  const credData = await readIni(credentials);
-  delete credData[profileName];
-  await writeIniAtomic(credentials, credData);
-  
-  // Remove from config
   const configData = await readIni(config);
-  delete configData[`profile ${profileName}`];
-  delete configData[profileName]; // Also try without prefix
+  const profileSection = `profile ${profileName}`;
+  const section = configData[profileSection] || configData[profileName];
+
+  // If SSO, clean up the sso-session block (only if no other profile references it)
+  if (section && section.sso_session) {
+    const ssoSessionName = section.sso_session;
+    const otherReferences = Object.keys(configData).filter(key => {
+      if (key === profileSection || key === profileName) return false;
+      return configData[key].sso_session === ssoSessionName;
+    });
+    if (otherReferences.length === 0) {
+      delete configData[`sso-session ${ssoSessionName}`];
+    }
+  }
+
+  delete configData[profileSection];
+  delete configData[profileName];
   await writeIniAtomic(config, configData);
+
+  // Remove from credentials (may not exist for SSO profiles)
+  const credData = await readIni(credentials);
+  if (credData[profileName]) {
+    delete credData[profileName];
+    await writeIniAtomic(credentials, credData);
+  }
 }
 
 export async function getProfileCredentials(profileName: string): Promise<{ accessKeyId: string; secretAccessKey: string } | null> {

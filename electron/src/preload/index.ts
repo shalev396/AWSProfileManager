@@ -16,6 +16,8 @@ export interface ElectronAPI {
     delete: (profileName: string) => Promise<any>;
     setActive: (profileName: string) => Promise<any>;
     verify: (profileName: string) => Promise<any>;
+    ssoLogin: (profileName: string) => Promise<any>;
+    getSsoConfig: (profileName: string) => Promise<any>;
   };
   profiles: {
     listFromAws: () => Promise<any>;
@@ -49,6 +51,8 @@ const api: ElectronAPI = {
     setActive: (profileName) =>
       ipcRenderer.invoke("accounts:setActive", profileName),
     verify: (profileName) => ipcRenderer.invoke("accounts:verify", profileName),
+    ssoLogin: (profileName) => ipcRenderer.invoke("accounts:ssoLogin", profileName),
+    getSsoConfig: (profileName) => ipcRenderer.invoke("accounts:getSsoConfig", profileName),
   },
   profiles: {
     listFromAws: () => ipcRenderer.invoke("profiles:listFromAws"),

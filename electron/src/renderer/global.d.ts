@@ -31,6 +31,23 @@ declare global {
           error?: string;
           identity?: { account: string; arn: string; userId: string };
         }>;
+        ssoLogin: (profileName: string) => Promise<{
+          success: boolean;
+          error?: string;
+        }>;
+        getSsoConfig: (profileName: string) => Promise<{
+          success: boolean;
+          data?: {
+            ssoSessionName: string;
+            ssoAccountId: string;
+            ssoRoleName: string;
+            ssoStartUrl: string;
+            ssoRegion: string;
+            region: string;
+            output: string;
+          } | null;
+          error?: string;
+        }>;
       };
       profiles: {
         listFromAws: () => Promise<{
@@ -54,6 +71,7 @@ declare global {
         }>;
         openDataFolder: () => Promise<void>;
         getLogoDataUrl: (logoPath: string) => Promise<string | null>;
+        onStateChanged: (callback: () => void) => () => void;
       };
     };
   }

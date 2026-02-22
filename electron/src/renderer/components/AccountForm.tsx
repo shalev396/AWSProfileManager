@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Account, AccountFormData } from "../types";
+import { Account, AccountFormData, AuthType } from "../types";
 import { AWS_REGIONS } from "../awsRegions";
 
 interface AccountFormProps {
@@ -17,9 +17,15 @@ const AccountForm: React.FC<AccountFormProps> = ({
 }) => {
   const [formData, setFormData] = useState<AccountFormData>({
     profileName: account?.profileName || "",
+    authType: account?.authType || "access-key",
     accessKeyId: "",
     secretAccessKey: "",
-    region: account?.region || "il-central-1",
+    ssoStartUrl: account?.ssoStartUrl || "",
+    ssoAccountId: account?.ssoAccountId || "",
+    ssoRoleName: account?.ssoRoleName || "",
+    ssoRegion: account?.ssoRegion || "",
+    ssoSessionName: account?.ssoSessionName || "",
+    region: account?.region || "us-east-1",
     output: account?.output || "json",
     logoPath: account?.logoPath || "",
     displayName: account?.displayName || "",
@@ -28,19 +34,33 @@ const AccountForm: React.FC<AccountFormProps> = ({
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<string | null>(null);
 
-  // In edit mode, load access key for display (never load secret)
   useEffect(() => {
     if (mode === "edit" && account?.profileName) {
-      window.electron.accounts.getAccessKey(account.profileName).then((res) => {
-        if (res.success && res.data?.accessKeyId) {
-          setFormData((prev) => ({
-            ...prev,
-            accessKeyId: res.data!.accessKeyId,
-          }));
-        }
-      });
+      if (account.authType === "sso") {
+        window.electron.accounts.getSsoConfig(account.profileName).then((res) => {
+          if (res.success && res.data) {
+            setFormData((prev) => ({
+              ...prev,
+              ssoStartUrl: res.data!.ssoStartUrl,
+              ssoAccountId: res.data!.ssoAccountId,
+              ssoRoleName: res.data!.ssoRoleName,
+              ssoRegion: res.data!.ssoRegion,
+              ssoSessionName: res.data!.ssoSessionName,
+            }));
+          }
+        });
+      } else {
+        window.electron.accounts.getAccessKey(account.profileName).then((res) => {
+          if (res.success && res.data?.accessKeyId) {
+            setFormData((prev) => ({
+              ...prev,
+              accessKeyId: res.data!.accessKeyId,
+            }));
+          }
+        });
+      }
     }
-  }, [mode, account?.profileName]);
+  }, [mode, account?.profileName, account?.authType]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -49,10 +69,13 @@ const AccountForm: React.FC<AccountFormProps> = ({
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleAuthTypeChange = (authType: AuthType) => {
+    setFormData((prev) => ({ ...prev, authType }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
     if (!formData.profileName) {
       alert("Profile name is required");
       return;
@@ -65,19 +88,26 @@ const AccountForm: React.FC<AccountFormProps> = ({
       return;
     }
 
-    if (mode === "add") {
-      if (!formData.accessKeyId || !formData.secretAccessKey) {
-        alert("Access Key ID and Secret Access Key are required");
+    if (formData.authType === "sso") {
+      if (!formData.ssoStartUrl || !formData.ssoAccountId || !formData.ssoRoleName) {
+        alert("SSO Start URL, Account ID, and Role Name are required");
         return;
       }
-    }
-    if (
-      mode === "edit" &&
-      formData.secretAccessKey.trim() !== "" &&
-      formData.secretAccessKey.length < 40
-    ) {
-      alert("Secret Access Key must be at least 40 characters");
-      return;
+    } else {
+      if (mode === "add") {
+        if (!formData.accessKeyId || !formData.secretAccessKey) {
+          alert("Access Key ID and Secret Access Key are required");
+          return;
+        }
+      }
+      if (
+        mode === "edit" &&
+        formData.secretAccessKey.trim() !== "" &&
+        formData.secretAccessKey.length < 40
+      ) {
+        alert("Secret Access Key must be at least 40 characters");
+        return;
+      }
     }
 
     onSave(formData);
@@ -97,7 +127,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
         formData.profileName,
       );
 
-      if (result.success) {
+      if (result.success && result.identity) {
         setVerifyResult(
           `✓ Verified: ${result.identity.arn} (Account: ${result.identity.account})`,
         );
@@ -118,6 +148,8 @@ const AccountForm: React.FC<AccountFormProps> = ({
     }
   };
 
+  const isSso = formData.authType === "sso";
+
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
@@ -131,6 +163,35 @@ const AccountForm: React.FC<AccountFormProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} style={styles.form}>
+          {/* Auth Type Toggle */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Authentication Type</label>
+            <div style={styles.authToggle}>
+              <button
+                type="button"
+                style={{
+                  ...styles.authToggleBtn,
+                  ...(!isSso ? styles.authToggleBtnActive : {}),
+                }}
+                onClick={() => handleAuthTypeChange("access-key")}
+                disabled={mode === "edit"}
+              >
+                <span style={styles.authIcon}>🔑</span> Access Key
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.authToggleBtn,
+                  ...(isSso ? styles.authToggleBtnActiveSso : {}),
+                }}
+                onClick={() => handleAuthTypeChange("sso")}
+                disabled={mode === "edit"}
+              >
+                <span style={styles.authIcon}>🔗</span> SSO
+              </button>
+            </div>
+          </div>
+
           <div style={styles.formGroup}>
             <label style={styles.label}>
               Profile Name <span style={styles.required}>*</span>
@@ -161,39 +222,124 @@ const AccountForm: React.FC<AccountFormProps> = ({
             />
           </div>
 
-          <div style={styles.formGroup}>
-            <label style={styles.label}>
-              Access Key ID{" "}
-              {mode === "add" && <span style={styles.required}>*</span>}
-            </label>
-            <input
-              type="text"
-              name="accessKeyId"
-              value={formData.accessKeyId}
-              onChange={handleChange}
-              style={styles.input}
-              placeholder="AKIA..."
-            />
-          </div>
+          {/* Access Key Fields */}
+          {!isSso && (
+            <>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  Access Key ID{" "}
+                  {mode === "add" && <span style={styles.required}>*</span>}
+                </label>
+                <input
+                  type="text"
+                  name="accessKeyId"
+                  value={formData.accessKeyId}
+                  onChange={handleChange}
+                  style={styles.input}
+                  placeholder="AKIA..."
+                />
+              </div>
 
-          <div style={styles.formGroup}>
-            <label style={styles.label}>
-              Secret Access Key{" "}
-              {mode === "add" && <span style={styles.required}>*</span>}
-            </label>
-            <input
-              type="password"
-              name="secretAccessKey"
-              value={formData.secretAccessKey}
-              onChange={handleChange}
-              style={styles.input}
-              placeholder={
-                mode === "edit"
-                  ? "Enter new to change (leave blank to keep current)"
-                  : "••••••••••••••••••••"
-              }
-            />
-          </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  Secret Access Key{" "}
+                  {mode === "add" && <span style={styles.required}>*</span>}
+                </label>
+                <input
+                  type="password"
+                  name="secretAccessKey"
+                  value={formData.secretAccessKey}
+                  onChange={handleChange}
+                  style={styles.input}
+                  placeholder={
+                    mode === "edit"
+                      ? "Enter new to change (leave blank to keep current)"
+                      : "••••••••••••••••••••"
+                  }
+                />
+              </div>
+            </>
+          )}
+
+          {/* SSO Fields */}
+          {isSso && (
+            <>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  SSO Start URL <span style={styles.required}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="ssoStartUrl"
+                  value={formData.ssoStartUrl || ""}
+                  onChange={handleChange}
+                  style={styles.input}
+                  placeholder="https://my-org.awsapps.com/start"
+                />
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  SSO Account ID <span style={styles.required}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="ssoAccountId"
+                  value={formData.ssoAccountId || ""}
+                  onChange={handleChange}
+                  style={styles.input}
+                  placeholder="123456789012"
+                />
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  SSO Role Name <span style={styles.required}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="ssoRoleName"
+                  value={formData.ssoRoleName || ""}
+                  onChange={handleChange}
+                  style={styles.input}
+                  placeholder="AdministratorAccess"
+                />
+              </div>
+
+              <div style={styles.formRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>SSO Region</label>
+                  <select
+                    name="ssoRegion"
+                    value={formData.ssoRegion || formData.region}
+                    onChange={handleChange}
+                    style={styles.input}
+                  >
+                    {AWS_REGIONS.map((r) => (
+                      <option key={r.code} value={r.code}>
+                        {r.code} — {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>SSO Session Name</label>
+                  <input
+                    type="text"
+                    name="ssoSessionName"
+                    value={formData.ssoSessionName || ""}
+                    onChange={handleChange}
+                    style={styles.input}
+                    placeholder={formData.profileName ? `${formData.profileName}-session` : "auto-generated"}
+                  />
+                  <small style={styles.hint}>
+                    Leave blank to auto-generate
+                  </small>
+                </div>
+              </div>
+            </>
+          )}
 
           <div style={styles.formRow}>
             <div style={styles.formGroup}>
@@ -316,6 +462,39 @@ const styles = {
     overflow: "auto",
     boxShadow: "0 20px 25px -5px rgba(124, 58, 237, 0.15), 0 8px 10px -6px rgba(124, 58, 237, 0.1)",
     border: "1px solid #ede9fe",
+  } as React.CSSProperties,
+  authToggle: {
+    display: "flex",
+    gap: "0px",
+    borderRadius: "8px",
+    overflow: "hidden",
+    border: "1px solid #ede9fe",
+  } as React.CSSProperties,
+  authToggleBtn: {
+    flex: 1,
+    padding: "10px 16px",
+    fontSize: "14px",
+    fontWeight: 600,
+    cursor: "pointer",
+    border: "none",
+    background: "#faf5ff",
+    color: "#6b7280",
+    transition: "all 0.2s",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+  } as React.CSSProperties,
+  authToggleBtnActive: {
+    background: "#7c3aed",
+    color: "#fff",
+  } as React.CSSProperties,
+  authToggleBtnActiveSso: {
+    background: "#2563eb",
+    color: "#fff",
+  } as React.CSSProperties,
+  authIcon: {
+    fontSize: "16px",
   } as React.CSSProperties,
   header: {
     display: "flex",
