@@ -51,7 +51,7 @@ export default tseslint.config(
       'out',
       'node_modules',
       'eslint.config.mjs',
-      'notarize.cjs',
+      'electron-builder.cjs',
       'src/main/**',
     ],
   },

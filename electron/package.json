@@ -25,7 +25,6 @@
     "ini": "^4.1.1"
   },
   "overrides": {
-    "@electron/notarize": "2.3.2",
     "tar": "^7.5.12",
     "rollup": "^4.53.3"
   },
@@ -38,6 +37,7 @@
     "@types/react-dom": "^18.2.18",
     "@vitejs/plugin-react": "^5.1.1",
     "electron": "^35.7.5",
+    "dotenv": "^16.4.5",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
@@ -49,60 +49,5 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.0.4"
-  },
-  "build": {
-    "appId": "com.shalev.aws-profile-manager",
-    "productName": "AWS Profile Manager",
-    "directories": {
-      "output": "dist"
-    },
-    "asarUnpack": [
-      "**/node_modules/better-sqlite3/**"
-    ],
-    "afterSign": "notarize.cjs",
-    "files": [
-      "out",
-      "assets/**"
-    ],
-    "mac": {
-      "icon": "assets/icon.png",
-      "category": "public.app-category.developer-tools",
-      "target": [
-        "dmg"
-      ],
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": false,
-      "extendInfo": {
-        "CFBundleName": "AWS Profile Manager",
-        "CFBundleDisplayName": "AWS Profile Manager",
-        "LSMultipleInstancesProhibit": true
-      }
-    },
-    "win": {
-      "icon": "assets/icon.png",
-      "target": [
-        "nsis"
-      ],
-      "signtoolOptions": {
-        "publisherName": "Shalev Ben Moshe"
-      }
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "shortcutName": "AWS Profile Manager"
-    },
-    "linux": {
-      "icon": "assets/icon.png",
-      "target": [
-        "AppImage"
-      ],
-      "category": "Development",
-      "maintainer": "Shalev",
-      "synopsis": "Manage and switch AWS CLI profiles"
-    }
   }
 }
