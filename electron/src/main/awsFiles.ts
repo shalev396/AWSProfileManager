@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
+import { createHash } from 'crypto';
 import * as ini from 'ini';
 
 export interface AwsPaths {
@@ -57,14 +58,8 @@ export async function writeIniAtomic(filePath: string, data: any): Promise<void>
     // Write to temp file
     const content = ini.stringify(data);
     await fs.writeFile(tempPath, content, { mode: 0o600 });
-    
-    // Atomic rename
+
     await fs.rename(tempPath, filePath);
-    
-    // Set permissions on Unix-like systems
-    if (os.platform() !== 'win32') {
-      await fs.chmod(filePath, 0o600);
-    }
   } catch (error) {
     // Clean up temp file if it exists
     try {
@@ -151,7 +146,7 @@ export async function getProfileAuthType(profileName: string): Promise<'access-k
   const configData = await readIni(config);
   const sectionName = `profile ${profileName}`;
   const section = configData[sectionName] || configData[profileName];
-  if (section && section.sso_session) {
+  if (section?.sso_session) {
     return 'sso';
   }
   return 'access-key';
@@ -172,7 +167,7 @@ export async function getSsoProfileConfig(profileName: string): Promise<SsoConfi
   const configData = await readIni(config);
   const sectionName = `profile ${profileName}`;
   const section = configData[sectionName] || configData[profileName];
-  if (!section || !section.sso_session) {
+  if (!section?.sso_session) {
     return null;
   }
 
@@ -200,14 +195,14 @@ export async function setDefaultFromProfile(profileName: string): Promise<void> 
     const configSectionName = `profile ${profileName}`;
     const section = configData[configSectionName] || configData[profileName];
     if (section) {
-      configData['default'] = { ...section };
+      configData.default = { ...section };
     }
     await writeIniAtomic(config, configData);
 
     // Remove [default] from credentials so stale access keys don't take precedence
     const credData = await readIni(credentials);
-    if (credData['default']) {
-      delete credData['default'];
+    if (credData.default) {
+      delete credData.default;
       await writeIniAtomic(credentials, credData);
     }
   } else {
@@ -217,16 +212,16 @@ export async function setDefaultFromProfile(profileName: string): Promise<void> 
       throw new Error(`Profile "${profileName}" not found in credentials file`);
     }
 
-    credData['default'] = { ...credData[profileName] };
+    credData.default = { ...credData[profileName] };
     await writeIniAtomic(credentials, credData);
 
     const configData = await readIni(config);
     const configSectionName = `profile ${profileName}`;
 
     if (configData[configSectionName]) {
-      configData['default'] = { ...configData[configSectionName] };
+      configData.default = { ...configData[configSectionName] };
     } else if (configData[profileName]) {
-      configData['default'] = { ...configData[profileName] };
+      configData.default = { ...configData[profileName] };
     }
 
     await writeIniAtomic(config, configData);
@@ -242,7 +237,7 @@ export async function listProfiles(): Promise<string[]> {
 
   // Profiles from credentials file
   for (const key of Object.keys(credData)) {
-    if (key !== 'default') profiles.add(key);
+    if (key !== 'default') {profiles.add(key);}
   }
 
   // SSO profiles from config file (sections starting with "profile ")
@@ -265,10 +260,10 @@ export async function deleteProfile(profileName: string): Promise<void> {
   const section = configData[profileSection] || configData[profileName];
 
   // If SSO, clean up the sso-session block (only if no other profile references it)
-  if (section && section.sso_session) {
+  if (section?.sso_session) {
     const ssoSessionName = section.sso_session;
     const otherReferences = Object.keys(configData).filter(key => {
-      if (key === profileSection || key === profileName) return false;
+      if (key === profileSection || key === profileName) {return false;}
       return configData[key].sso_session === ssoSessionName;
     });
     if (otherReferences.length === 0) {
@@ -300,4 +295,55 @@ export async function getProfileCredentials(profileName: string): Promise<{ acce
     accessKeyId: data[profileName].aws_access_key_id || '',
     secretAccessKey: data[profileName].aws_secret_access_key || ''
   };
+}
+
+/**
+ * CLI/botocore SSO cache filename: `~/.aws/sso/cache/<sha1>.json`.
+ * With `sso_session` in config, botocore hashes the **session name**, not the start URL.
+ * @see botocore SSOTokenLoader._generate_cache_key
+ */
+export function getSsoCacheFilePath(startUrl: string, ssoSessionName?: string | null): string {
+  const key =
+    typeof ssoSessionName === 'string' && ssoSessionName.trim() !== ''
+      ? ssoSessionName.trim()
+      : startUrl;
+  const hash = createHash('sha1').update(key, 'utf8').digest('hex');
+  return path.join(getAwsPaths().dir, 'sso', 'cache', `${hash}.json`);
+}
+
+export async function ensureSsoCacheDir(): Promise<void> {
+  const dir = path.join(getAwsPaths().dir, 'sso', 'cache');
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+}
+
+export async function writeSsoLoginCache(params: {
+  startUrl: string;
+  /** Must match `[sso-session NAME]` — botocore uses this for the cache file name. */
+  ssoSessionName: string;
+  region: string;
+  clientId: string;
+  clientSecret: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: string;
+  /** Required by AWS CLI/botocore for refresh_token grant; omit if unknown. */
+  registrationExpiresAt?: string;
+}): Promise<void> {
+  await ensureSsoCacheDir();
+  const filePath = getSsoCacheFilePath(params.startUrl, params.ssoSessionName);
+  const payload: Record<string, string> = {
+    startUrl: params.startUrl,
+    region: params.region,
+    accessToken: params.accessToken,
+    expiresAt: params.expiresAt,
+    clientId: params.clientId,
+    clientSecret: params.clientSecret,
+  };
+  if (params.refreshToken) {
+    payload.refreshToken = params.refreshToken;
+  }
+  if (params.registrationExpiresAt) {
+    payload.registrationExpiresAt = params.registrationExpiresAt;
+  }
+  await fs.writeFile(filePath, JSON.stringify(payload), { mode: 0o600 });
 }

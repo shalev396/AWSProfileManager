@@ -1,12 +1,33 @@
 import React, { useState, useEffect } from "react";
-import { Account, AccountFormData, AuthType } from "../types";
+import type { Account, AccountFormData, AuthType } from "../types";
 import { AWS_REGIONS } from "../awsRegions";
+import { accountClient } from "../services/accountClient";
+
+export interface SaveAccountResult { success: boolean; error?: string }
 
 interface AccountFormProps {
   mode: "add" | "edit";
   account?: Account;
-  onSave: (data: AccountFormData) => void;
+  onSave: (data: AccountFormData) => Promise<SaveAccountResult>;
   onCancel: () => void;
+}
+
+function emptyForm(): AccountFormData {
+  return {
+    profileName: "",
+    authType: "iam",
+    accessKeyId: "",
+    secretAccessKey: "",
+    ssoStartUrl: "",
+    ssoAccountId: "",
+    ssoRoleName: "",
+    ssoRegion: "",
+    ssoSessionName: "",
+    region: "us-east-1",
+    output: "json",
+    logoPath: "",
+    displayName: "",
+  };
 }
 
 const AccountForm: React.FC<AccountFormProps> = ({
@@ -15,88 +36,105 @@ const AccountForm: React.FC<AccountFormProps> = ({
   onSave,
   onCancel,
 }) => {
-  const [formData, setFormData] = useState<AccountFormData>({
-    profileName: account?.profileName || "",
-    authType: account?.authType || "access-key",
-    accessKeyId: "",
-    secretAccessKey: "",
-    ssoStartUrl: account?.ssoStartUrl || "",
-    ssoAccountId: account?.ssoAccountId || "",
-    ssoRoleName: account?.ssoRoleName || "",
-    ssoRegion: account?.ssoRegion || "",
-    ssoSessionName: account?.ssoSessionName || "",
-    region: account?.region || "us-east-1",
-    output: account?.output || "json",
-    logoPath: account?.logoPath || "",
-    displayName: account?.displayName || "",
-  });
-
-  const [verifying, setVerifying] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<string | null>(null);
+  const [formData, setFormData] = useState(emptyForm());
 
   useEffect(() => {
-    if (mode === "edit" && account?.profileName) {
-      if (account.authType === "sso") {
-        window.electron.accounts.getSsoConfig(account.profileName).then((res) => {
-          if (res.success && res.data) {
-            setFormData((prev) => ({
-              ...prev,
-              ssoStartUrl: res.data!.ssoStartUrl,
-              ssoAccountId: res.data!.ssoAccountId,
-              ssoRoleName: res.data!.ssoRoleName,
-              ssoRegion: res.data!.ssoRegion,
-              ssoSessionName: res.data!.ssoSessionName,
-            }));
-          }
-        });
-      } else {
-        window.electron.accounts.getAccessKey(account.profileName).then((res) => {
-          if (res.success && res.data?.accessKeyId) {
-            setFormData((prev) => ({
-              ...prev,
-              accessKeyId: res.data!.accessKeyId,
-            }));
-          }
-        });
-      }
+    if (mode === "add") {
+      setFormData(emptyForm());
+      return;
     }
-  }, [mode, account?.profileName, account?.authType]);
+    if (!account?.id) {return;}
+
+    setFormData({
+      id: account.id,
+      profileName: account.profileName,
+      authType: account.authType,
+      accessKeyId: "",
+      secretAccessKey: "",
+      ssoStartUrl: account.startUrl || "",
+      ssoAccountId: account.awsAccountId || "",
+      ssoRoleName: account.roleName || "",
+      ssoRegion: account.ssoRegion || "",
+      ssoSessionName: account.ssoSessionName || "",
+      region: account.region || "us-east-1",
+      output: account.output || "json",
+      logoPath: account.logoPath || "",
+      displayName: account.name || "",
+    });
+
+    const editAccountId = account.id;
+    let cancelled = false;
+    void accountClient.getForEdit(editAccountId).then((res) => {
+      if (cancelled || !res.success || !res.data) {return;}
+      const { summary, accessKeyId } = res.data;
+      const s = summary as Account;
+      setFormData((prev) => {
+        if (prev.id !== editAccountId) {return prev;}
+        return {
+          ...prev,
+          displayName: s.name || prev.displayName || "",
+          region: s.region || prev.region,
+          output: s.output || prev.output,
+          logoPath: s.logoPath || prev.logoPath || "",
+          ssoStartUrl: s.startUrl || prev.ssoStartUrl || "",
+          ssoAccountId: s.awsAccountId || prev.ssoAccountId || "",
+          ssoRoleName: s.roleName || prev.ssoRoleName || "",
+          ssoRegion: s.ssoRegion || prev.ssoRegion || "",
+          ssoSessionName: s.ssoSessionName || prev.ssoSessionName || "",
+          ...(accessKeyId ? { accessKeyId } : {}),
+        };
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, account?.id]);
+
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
+    setFormError(null);
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleAuthTypeChange = (authType: AuthType) => {
+    setFormError(null);
     setFormData((prev) => ({ ...prev, authType }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
 
     if (!formData.profileName) {
-      alert("Profile name is required");
+      setFormError("Profile name is required");
       return;
     }
 
     if (!/^[a-zA-Z0-9-_]+$/.test(formData.profileName)) {
-      alert(
+      setFormError(
         "Profile name can only contain letters, numbers, hyphens, and underscores",
       );
       return;
     }
 
     if (formData.authType === "sso") {
-      if (!formData.ssoStartUrl || !formData.ssoAccountId || !formData.ssoRoleName) {
-        alert("SSO Start URL, Account ID, and Role Name are required");
+      if (
+        !formData.ssoStartUrl ||
+        !formData.ssoAccountId ||
+        !formData.ssoRoleName
+      ) {
+        setFormError("SSO Start URL, Account ID, and Role Name are required");
         return;
       }
     } else {
       if (mode === "add") {
         if (!formData.accessKeyId || !formData.secretAccessKey) {
-          alert("Access Key ID and Secret Access Key are required");
+          setFormError("Access Key ID and Secret Access Key are required");
           return;
         }
       }
@@ -105,27 +143,37 @@ const AccountForm: React.FC<AccountFormProps> = ({
         formData.secretAccessKey.trim() !== "" &&
         formData.secretAccessKey.length < 40
       ) {
-        alert("Secret Access Key must be at least 40 characters");
+        setFormError("Secret Access Key must be at least 40 characters");
         return;
       }
     }
 
-    onSave(formData);
+    setSubmitting(true);
+    try {
+      const result = await onSave(formData);
+      if (!result.success) {
+        setFormError(result.error ?? "Save failed");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<string | null>(null);
+
   const handleVerify = async () => {
-    if (!formData.profileName) {
-      alert("Please enter a profile name first");
+    if (mode !== "edit" || !formData.id) {
+      setFormError("Save the account first, then use Test Connection.");
       return;
     }
 
+    setFormError(null);
     setVerifying(true);
     setVerifyResult(null);
 
     try {
-      const result = await window.electron.accounts.verify(
-        formData.profileName,
-      );
+      const result = await accountClient.verify(formData.id);
 
       if (result.success && result.identity) {
         setVerifyResult(
@@ -134,17 +182,18 @@ const AccountForm: React.FC<AccountFormProps> = ({
       } else {
         setVerifyResult(`✗ Error: ${result.error}`);
       }
-    } catch (error: any) {
-      setVerifyResult(`✗ Error: ${error.message}`);
+    } catch (error: unknown) {
+      setVerifyResult(`✗ Error: ${(error as Error).message}`);
     } finally {
       setVerifying(false);
     }
   };
 
   const handleSelectLogo = async () => {
+    setFormError(null);
     const result = await window.electron.dialog.selectImageFile();
     if (!result.canceled && result.filePath) {
-      setFormData((prev) => ({ ...prev, logoPath: result.filePath }));
+      setFormData((prev) => ({ ...prev, logoPath: result.filePath ?? "" }));
     }
   };
 
@@ -157,13 +206,17 @@ const AccountForm: React.FC<AccountFormProps> = ({
           <h2 style={styles.title}>
             {mode === "add" ? "Add Account" : "Edit Account"}
           </h2>
-          <button style={styles.closeButton} onClick={onCancel}>
+          <button type="button" style={styles.closeButton} onClick={onCancel}>
             ×
           </button>
         </div>
 
         <form onSubmit={handleSubmit} style={styles.form}>
-          {/* Auth Type Toggle */}
+          {formError && (
+            <div style={styles.formErrorBanner} role="alert">
+              {formError}
+            </div>
+          )}
           <div style={styles.formGroup}>
             <label style={styles.label}>Authentication Type</label>
             <div style={styles.authToggle}>
@@ -173,7 +226,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
                   ...styles.authToggleBtn,
                   ...(!isSso ? styles.authToggleBtnActive : {}),
                 }}
-                onClick={() => handleAuthTypeChange("access-key")}
+                onClick={() => { handleAuthTypeChange("iam"); }}
                 disabled={mode === "edit"}
               >
                 <span style={styles.authIcon}>🔑</span> Access Key
@@ -184,7 +237,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
                   ...styles.authToggleBtn,
                   ...(isSso ? styles.authToggleBtnActiveSso : {}),
                 }}
-                onClick={() => handleAuthTypeChange("sso")}
+                onClick={() => { handleAuthTypeChange("sso"); }}
                 disabled={mode === "edit"}
               >
                 <span style={styles.authIcon}>🔗</span> SSO
@@ -222,7 +275,6 @@ const AccountForm: React.FC<AccountFormProps> = ({
             />
           </div>
 
-          {/* Access Key Fields */}
           {!isSso && (
             <>
               <div style={styles.formGroup}>
@@ -261,7 +313,6 @@ const AccountForm: React.FC<AccountFormProps> = ({
             </>
           )}
 
-          {/* SSO Fields */}
           {isSso && (
             <>
               <div style={styles.formGroup}>
@@ -331,11 +382,13 @@ const AccountForm: React.FC<AccountFormProps> = ({
                     value={formData.ssoSessionName || ""}
                     onChange={handleChange}
                     style={styles.input}
-                    placeholder={formData.profileName ? `${formData.profileName}-session` : "auto-generated"}
+                    placeholder={
+                      formData.profileName
+                        ? `${formData.profileName}-session`
+                        : "auto-generated"
+                    }
                   />
-                  <small style={styles.hint}>
-                    Leave blank to auto-generate
-                  </small>
+                  <small style={styles.hint}>Leave blank to auto-generate</small>
                 </div>
               </div>
             </>
@@ -429,8 +482,16 @@ const AccountForm: React.FC<AccountFormProps> = ({
               >
                 Cancel
               </button>
-              <button type="submit" style={styles.saveButton}>
-                {mode === "add" ? "Add Account" : "Save Changes"}
+              <button
+                type="submit"
+                style={styles.saveButton}
+                disabled={submitting}
+              >
+                {submitting
+                  ? "Saving…"
+                  : mode === "add"
+                    ? "Add Account"
+                    : "Save Changes"}
               </button>
             </div>
           </div>
@@ -460,7 +521,8 @@ const styles = {
     maxWidth: "600px",
     maxHeight: "90vh",
     overflow: "auto",
-    boxShadow: "0 20px 25px -5px rgba(124, 58, 237, 0.15), 0 8px 10px -6px rgba(124, 58, 237, 0.1)",
+    boxShadow:
+      "0 20px 25px -5px rgba(124, 58, 237, 0.15), 0 8px 10px -6px rgba(124, 58, 237, 0.1)",
     border: "1px solid #ede9fe",
   } as React.CSSProperties,
   authToggle: {
@@ -523,6 +585,15 @@ const styles = {
   } as React.CSSProperties,
   form: {
     padding: "24px",
+  } as React.CSSProperties,
+  formErrorBanner: {
+    padding: "12px 14px",
+    marginBottom: "16px",
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    borderRadius: "8px",
+    color: "#991b1b",
+    fontSize: "14px",
   } as React.CSSProperties,
   formGroup: {
     marginBottom: "20px",

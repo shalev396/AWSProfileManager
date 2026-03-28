@@ -28,7 +28,8 @@ The app appears in the system tray (Windows: bottom right; macOS: menu bar top r
 - **Switch profile:** Click the tray icon and choose an account.
 - **Add or edit accounts:** Tray icon → **Manage Accounts…**
 - **Data location:** Shown at the bottom of the Manage window; you can open that folder from the app.
-- **AWS files:** Credentials and config are in `~/.aws` (macOS/Linux) or `%USERPROFILE%\.aws` (Windows). Backups (`.bak`) are created before changes.
+- **Local database:** `app-data.sqlite` under Electron **userData** (path shown in the app) stores account metadata and encrypted secrets (`safeStorage`). Logos live in **`logos/`** next to it.
+- **AWS files:** The active profile is synced to `~/.aws` (macOS/Linux) or `%USERPROFILE%\.aws` (Windows) so the CLI can use it. Backups (`.bak`) are created before changes.
 
 ### Windows
 
@@ -40,7 +41,7 @@ Tray is menu bar (top right). Closing the window only hides the app; use the tra
 
 ### Linux
 
-Uses system tray if supported. App data: `~/.config/aws-profile-manager/`. For AppImage: `chmod +x AWS-Profile-Manager*.AppImage` then run it.
+Uses system tray if supported. App data uses Electron **userData** (path is shown in the app). Install/configure a **keyring** (e.g. libsecret) so secrets can be encrypted. For AppImage, mark the file executable in your file manager if your OS requires it, then run it.
 
 ## Updating
 
@@ -55,3 +56,7 @@ npm run package:linux # Linux .AppImage
 ```
 
 Output is in `dist/`.
+
+## Native module note (`postinstall`)
+
+`better-sqlite3` ships a **native** addon built for Node’s ABI. Electron ships its own Node, so after `npm install` the **`postinstall`** script runs **`@electron/rebuild`** to compile `better-sqlite3` for **your installed Electron version**. That is not a shelling out to `aws` or OS-specific CLI tools—it is the standard way native addons stay compatible with Electron. The deprecation warnings you may see come from older transitive tooling inside the rebuild pipeline, not from the app at runtime.

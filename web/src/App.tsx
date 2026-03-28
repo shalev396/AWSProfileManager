@@ -1,17 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { RefreshCw, Palette, Lock, Zap } from "lucide-react";
 import { downloads } from "./config";
 
+function detectPlatformFromUserAgent(): "mac" | "windows" | "linux" | null {
+  const userAgent = navigator.userAgent.toLowerCase();
+  if (userAgent.includes("mac")) {
+    return "mac";
+  }
+  if (userAgent.includes("win")) {
+    return "windows";
+  }
+  if (userAgent.includes("linux")) {
+    return "linux";
+  }
+  return null;
+}
 
 function App() {
-  const [detectedPlatform, setDetectedPlatform] = useState<string | null>(null);
-
-  useEffect(() => {
-    const userAgent = navigator.userAgent.toLowerCase();
-    if (userAgent.includes("mac")) setDetectedPlatform("mac");
-    else if (userAgent.includes("win")) setDetectedPlatform("windows");
-    else if (userAgent.includes("linux")) setDetectedPlatform("linux");
-  }, []);
+  const [detectedPlatform] = useState<"mac" | "windows" | "linux" | null>(
+    detectPlatformFromUserAgent,
+  );
 
   return (
     <div className="app">

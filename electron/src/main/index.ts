@@ -1,11 +1,15 @@
 import { app, BrowserWindow } from 'electron';
 import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
 import { ensureAwsDir } from './awsFiles';
-import { loadAccounts } from './accountsStore';
-import { setupIpcHandlers, setTrayUpdateCallback, notifyRendererStateChanged } from './ipcHandlers';
+import { loadAppNativeImage, resolveRasterIconPath } from './appIcon';
+import { openDatabase } from './db/sqlite';
+import { setupIpcHandlers, setTrayUpdateCallback, notifyRendererStateChanged } from './ipc/setupIpc';
 import { TrayManager } from './trayManager';
+import { getAccountService } from './accounts/accountService';
+import type { AccountSummary } from './accounts/types';
+import type { TrayAccount } from './trayManager';
+import { offerOpenAtLoginOnFirstRun } from './launchAtLoginPrompt';
+import { setApplicationMenu } from './applicationMenu';
 
 let mainWindow: BrowserWindow | null = null;
 let trayManager: TrayManager | null = null;
@@ -13,40 +17,65 @@ let isQuitting = false;
 
 const APP_NAME = 'AWS Profile Manager';
 
-function getAssetsDir(): string {
-  const appPath = app.getAppPath();
-  const candidate = path.join(appPath, 'assets');
-  if (fs.existsSync(candidate)) return candidate;
-  return path.join(__dirname, '../../assets');
+/** Windows taskbar grouping + correct shortcut icon when running unpackaged. */
+const APP_USER_MODEL_ID = 'com.shalev.aws-profile-manager';
+
+if (process.platform === 'win32') {
+  app.setAppUserModelId(APP_USER_MODEL_ID);
 }
 
-function createWindow(): void {
-  mainWindow = new BrowserWindow({
-    width: 900,
-    height: 700,
+/** Focus the one main window (tray “Manage”, shortcut, or second app launch). */
+function showExistingMainWindow(): void {
+  const win =
+    mainWindow && !mainWindow.isDestroyed()
+      ? mainWindow
+      : BrowserWindow.getAllWindows()[0] ?? null;
+  if (!win || win.isDestroyed()) {return;}
+  if (win.isMinimized()) {win.restore();}
+  win.show();
+  win.focus();
+}
+
+function createWindow(iconImage: Electron.NativeImage | null): void {
+  const rasterPath = resolveRasterIconPath();
+  const winOpts: Electron.BrowserWindowConstructorOptions = {
+    width: 960,
+    height: 740,
+    minWidth: 420,
+    minHeight: 520,
     show: false,
     title: APP_NAME,
+    backgroundColor: '#faf5ff',
+    /** Standard OS caption; custom overlay was reverted (misaligned controls + menu on Windows). */
+    /** Menu hidden until Alt — shortcuts still work. */
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
-      contextIsolation: true
-    }
-  });
+      contextIsolation: true,
+    },
+  };
+  if (iconImage && !iconImage.isEmpty()) {
+    winOpts.icon = iconImage;
+  } else if (rasterPath) {
+    winOpts.icon = rasterPath;
+  }
+  mainWindow = new BrowserWindow(winOpts);
 
-  // In development, load from dev server
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:5173');
+  const devRendererUrl = process.env.ELECTRON_RENDERER_URL;
+  if (devRendererUrl) {
+    mainWindow.loadURL(devRendererUrl);
   } else {
-    // In production, load from built files
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
     mainWindow?.focus();
+    void offerOpenAtLoginOnFirstRun(mainWindow);
   });
 
-  mainWindow.on('page-title-updated', (e) => e.preventDefault());
+  mainWindow.on('page-title-updated', (e) => { e.preventDefault(); });
   mainWindow.setTitle(APP_NAME);
 
   mainWindow.on('close', (event) => {
@@ -58,105 +87,111 @@ function createWindow(): void {
 }
 
 async function updateTray(): Promise<void> {
-  if (!trayManager) return;
+  if (!trayManager) {return;}
 
-  const appData = await loadAccounts();
-  const activeProfile = appData.activeProfile;
-  
-  // Update tray menu
+  const svc = getAccountService();
+  const summaries = svc.listSummaries();
+  const activeAccountId = svc.getActiveAccountId();
+
+  const accountsForTray: TrayAccount[] = summaries.map((s: AccountSummary) => ({
+    id: s.id,
+    profileName: s.profileName,
+    displayName: s.name,
+    authType: s.authType,
+    ...(s.logoPath !== undefined && s.logoPath !== null && s.logoPath !== ''
+      ? { logoPath: s.logoPath }
+      : {}),
+  }));
+
   trayManager.updateMenu(
-    appData.accounts,
-    activeProfile,
-    async (profileName: string) => {
-      // Handle profile switch from tray
-      const { setDefaultFromProfile } = await import('./awsFiles');
-      const { setActiveProfile } = await import('./accountsStore');
-      
+    accountsForTray,
+    activeAccountId,
+    async (accountId: string) => {
       try {
-        await setDefaultFromProfile(profileName);
-        await setActiveProfile(profileName);
+        const result = await svc.switchAccount(accountId);
         await updateTray();
-        
-        const account = appData.accounts.find(a => a.profileName === profileName);
-        const displayName = account?.displayName || profileName;
-        trayManager?.showNotification(
-          'AWS Profile Switched',
-          `Active profile: ${displayName}`
-        );
-        // So the open Manage window refreshes when user switched from tray
+        const acc = accountsForTray.find((a: TrayAccount) => a.id === accountId);
+        const label = acc?.displayName || acc?.profileName || accountId;
+        if (result.error) {
+          const msg = result.requiresSsoLogin
+            ? `${result.error} Open the app and use SSO Login.`
+            : result.error;
+          trayManager?.showNotification('Error', msg);
+        } else {
+          trayManager?.showNotification('AWS Profile Switched', `Active profile: ${label}`);
+        }
         notifyRendererStateChanged();
-      } catch (error: any) {
-        trayManager?.showNotification(
-          'Error',
-          `Failed to switch profile: ${error.message}`
-        );
+      } catch (error: unknown) {
+        trayManager?.showNotification('Error', (error as Error).message);
       }
     },
     () => {
-      // Handle "Manage Accounts" click
-      if (mainWindow) {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    }
+      showExistingMainWindow();
+    },
   );
 
-  // Update tray icon (use default icon when account has no logo)
-  if (activeProfile) {
-    const account = appData.accounts.find(a => a.profileName === activeProfile);
+  if (activeAccountId) {
+    const account = summaries.find((a: AccountSummary) => a.id === activeAccountId);
     trayManager.updateIcon(account?.logoPath ?? null);
-    trayManager.setTooltip(`AWS Active: ${account?.displayName || activeProfile}`);
+    trayManager.setTooltip(`AWS Active: ${account?.name || account?.profileName || ''}`);
   } else {
     trayManager.updateIcon(null);
     trayManager.setTooltip('AWS Profile Manager - No active profile');
   }
 }
 
-// Set app name early so menu bar/Dock show "AWS Profile Manager" (in packaged app; in dev macOS may still show "Electron")
-app.setName(APP_NAME);
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
-app.whenReady().then(async () => {
-  try {
-    const assetsDir = getAssetsDir();
-    const iconPath = path.join(assetsDir, 'icon.png');
-    if (os.platform() === 'darwin' && fs.existsSync(iconPath)) {
-      const { nativeImage } = await import('electron');
-      const icon = nativeImage.createFromPath(iconPath);
-      if (!icon.isEmpty()) app.dock?.setIcon(icon);
-    }
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    showExistingMainWindow();
+  });
 
-    await ensureAwsDir();
-    setTrayUpdateCallback(updateTray);
+  app.setName(APP_NAME);
 
-    trayManager = new TrayManager();
-    trayManager.createTray();
+  app.whenReady().then(async () => {
+    try {
+      setApplicationMenu();
 
-    // 5. Update tray with initial data
-    await updateTray();
-
-    // 6. Create window (hidden by default)
-    createWindow();
-    setupIpcHandlers(mainWindow);
-
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-        setupIpcHandlers(mainWindow);
+      const appIcon = loadAppNativeImage();
+      if (appIcon && !appIcon.isEmpty() && app.dock) {
+        app.dock.setIcon(appIcon);
       }
-    });
-  } catch (error) {
-    console.error('Error during app initialization:', error);
-  }
-});
 
-app.on('window-all-closed', () => {
-  // Don't quit when all windows are closed (tray app)
-  // Users can quit via tray menu
-});
+      openDatabase();
 
-app.on('before-quit', () => {
-  isQuitting = true;
-  if (trayManager) {
-    trayManager.destroy();
-  }
-});
+      await ensureAwsDir();
+      setTrayUpdateCallback(updateTray);
+
+      trayManager = new TrayManager();
+      trayManager.createTray();
+
+      await updateTray();
+
+      createWindow(appIcon);
+      setupIpcHandlers(mainWindow);
+
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          createWindow(loadAppNativeImage());
+          setupIpcHandlers(mainWindow);
+        } else {
+          showExistingMainWindow();
+        }
+      });
+    } catch (error) {
+      console.error('Error during app initialization:', error);
+    }
+  });
+
+  app.on('window-all-closed', () => {});
+
+  app.on('before-quit', () => {
+    isQuitting = true;
+    if (trayManager) {
+      trayManager.destroy();
+    }
+  });
+}

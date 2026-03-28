@@ -7,7 +7,9 @@
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "tsc -b && electron-vite build",
+    "typecheck": "tsc -b",
+    "lint": "eslint . --max-warnings 0",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
     "package:mac": "npm run build && electron-builder --mac",
@@ -16,24 +18,37 @@
     "package": "npm run build && electron-builder"
   },
   "dependencies": {
+    "@aws-sdk/client-sso": "^3.1019.0",
+    "@aws-sdk/client-sso-oidc": "^3.1019.0",
+    "@aws-sdk/client-sts": "^3.1019.0",
+    "better-sqlite3": "^12.8.0",
     "ini": "^4.1.1"
   },
   "overrides": {
-    "@electron/notarize": "2.3.2"
+    "@electron/notarize": "2.3.2",
+    "tar": "^7.5.12",
+    "rollup": "^4.53.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/ini": "^4.1.1",
-    "@types/node": "^20.11.5",
+    "@types/node": "^24.10.9",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
-    "@vitejs/plugin-react": "^4.2.1",
-    "electron": "^28.2.0",
-    "electron-builder": "^24.9.1",
-    "electron-vite": "^2.0.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^35.7.5",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "typescript": "^5.3.3",
-    "vite": "^5.0.12"
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vite": "^7.0.4"
   },
   "build": {
     "appId": "com.shalev.aws-profile-manager",
@@ -41,15 +56,20 @@
     "directories": {
       "output": "dist"
     },
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ],
     "afterSign": "notarize.cjs",
     "files": [
       "out",
-      "assets/icon.png"
+      "assets/**"
     ],
     "mac": {
       "icon": "assets/icon.png",
       "category": "public.app-category.developer-tools",
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -57,13 +77,18 @@
       "notarize": false,
       "extendInfo": {
         "CFBundleName": "AWS Profile Manager",
-        "CFBundleDisplayName": "AWS Profile Manager"
+        "CFBundleDisplayName": "AWS Profile Manager",
+        "LSMultipleInstancesProhibit": true
       }
     },
     "win": {
       "icon": "assets/icon.png",
-      "target": ["nsis"],
-      "publisherName": "Shalev Ben Moshe"
+      "target": [
+        "nsis"
+      ],
+      "signtoolOptions": {
+        "publisherName": "Shalev Ben Moshe"
+      }
     },
     "nsis": {
       "oneClick": false,
@@ -72,7 +97,9 @@
     },
     "linux": {
       "icon": "assets/icon.png",
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Development",
       "maintainer": "Shalev",
       "synopsis": "Manage and switch AWS CLI profiles"
