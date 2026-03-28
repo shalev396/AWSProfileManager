@@ -1,53 +1,83 @@
+import type { SsoDeviceAuthorizationEvent } from "./types";
+
 declare global {
   interface Window {
     electron: {
       accounts: {
-        list: () => Promise<{ success: boolean; data?: any[]; error?: string }>;
+        list: () => Promise<{ success: boolean; data?: unknown[]; error?: string }>;
         getActive: () => Promise<{
           success: boolean;
           data?: string | null;
           error?: string;
         }>;
-        getAccessKey: (
-          profileName: string,
-        ) => Promise<{
+        getForEdit: (accountId: string) => Promise<{
           success: boolean;
-          data?: { accessKeyId: string } | null;
+          data?: { summary: unknown; accessKeyId?: string };
           error?: string;
         }>;
-        add: (data: any) => Promise<{ success: boolean; error?: string }>;
-        edit: (data: any) => Promise<{ success: boolean; error?: string }>;
-        delete: (
-          profileName: string,
-        ) => Promise<{ success: boolean; error?: string }>;
-        setActive: (profileName: string) => Promise<{
+        createIam: (data: {
+          profileName: string;
+          displayName?: string;
+          accessKeyId: string;
+          secretAccessKey: string;
+          region: string;
+          output: string;
+          logoPath?: string;
+        }) => Promise<{ success: boolean; data?: { id: string }; error?: string }>;
+        createSso: (data: {
+          profileName: string;
+          displayName?: string;
+          ssoStartUrl: string;
+          ssoAccountId: string;
+          ssoRoleName: string;
+          ssoRegion?: string;
+          ssoSessionName?: string;
+          region: string;
+          output: string;
+          logoPath?: string;
+        }) => Promise<{ success: boolean; data?: { id: string }; error?: string }>;
+        updateIam: (data: {
+          id: string;
+          displayName?: string;
+          accessKeyId?: string;
+          secretAccessKey?: string;
+          region: string;
+          output: string;
+          logoPath?: string;
+        }) => Promise<{ success: boolean; error?: string }>;
+        updateSso: (data: {
+          id: string;
+          displayName?: string;
+          ssoStartUrl: string;
+          ssoAccountId: string;
+          ssoRoleName: string;
+          ssoRegion?: string;
+          ssoSessionName?: string;
+          region: string;
+          output: string;
+          logoPath?: string;
+        }) => Promise<{ success: boolean; error?: string }>;
+        delete: (accountId: string) => Promise<{ success: boolean; error?: string }>;
+        switch: (accountId: string) => Promise<{
           success: boolean;
           error?: string;
+          requiresSsoLogin?: boolean;
           verified?: boolean;
           identity?: { account: string; arn: string; userId?: string };
         }>;
-        verify: (profileName: string) => Promise<{
+        verify: (accountId: string) => Promise<{
           success: boolean;
           error?: string;
           identity?: { account: string; arn: string; userId: string };
         }>;
-        ssoLogin: (profileName: string) => Promise<{
+        ssoLogin: (accountId: string) => Promise<{
           success: boolean;
           error?: string;
+          accessExpiryUnchanged?: boolean;
         }>;
-        getSsoConfig: (profileName: string) => Promise<{
-          success: boolean;
-          data?: {
-            ssoSessionName: string;
-            ssoAccountId: string;
-            ssoRoleName: string;
-            ssoStartUrl: string;
-            ssoRegion: string;
-            region: string;
-            output: string;
-          } | null;
-          error?: string;
-        }>;
+        onSsoDeviceAuthorization: (
+          callback: (payload: SsoDeviceAuthorizationEvent) => void,
+        ) => () => void;
       };
       profiles: {
         listFromAws: () => Promise<{
@@ -71,7 +101,15 @@ declare global {
         }>;
         openDataFolder: () => Promise<void>;
         getLogoDataUrl: (logoPath: string) => Promise<string | null>;
+        getEncryptionStatus: () => Promise<{ available: boolean; debug: string }>;
         onStateChanged: (callback: () => void) => () => void;
+        getLaunchAtLogin: () => Promise<{
+          openAtLogin: boolean;
+          osControlsApply: boolean;
+        }>;
+        setLaunchAtLogin: (enabled: boolean) => Promise<{ success: true }>;
+        getAppVersion: () => Promise<{ version: string }>;
+        getAppIconDataUrl: () => Promise<string | null>;
       };
     };
   }

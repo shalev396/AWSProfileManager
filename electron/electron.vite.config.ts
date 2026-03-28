@@ -4,7 +4,15 @@ import { resolve } from 'path'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [
+      externalizeDepsPlugin({
+        exclude: [
+          '@aws-sdk/client-sts',
+          '@aws-sdk/client-sso',
+          '@aws-sdk/client-sso-oidc',
+        ],
+      }),
+    ],
     build: {
       rollupOptions: {
         input: {
@@ -29,7 +37,7 @@ export default defineConfig({
         '@': resolve(__dirname, 'src/renderer')
       }
     },
-    plugins: [react()],
+    plugins: [react({})],
     build: {
       rollupOptions: {
         input: {

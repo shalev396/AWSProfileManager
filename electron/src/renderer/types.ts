@@ -1,25 +1,34 @@
-export type AuthType = 'access-key' | 'sso';
+export type AuthType = "iam" | "sso";
 
-export interface Account {
-  profileName: string;
-  authType: AuthType;
-  displayName?: string;
-  logoPath?: string;
-  region?: string;
-  output?: string;
-  ssoStartUrl?: string;
-  ssoAccountId?: string;
-  ssoRoleName?: string;
-  ssoRegion?: string;
-  ssoSessionName?: string;
+/** Payload from main when IAM Identity Center device authorization starts (before browser opens). */
+export interface SsoDeviceAuthorizationEvent {
+  accountId: string;
+  userCode: string;
+  verificationUri?: string;
+  verificationUriComplete?: string;
+  expiresIn?: number;
 }
 
-export interface AppData {
-  activeProfile: string | null;
-  accounts: Account[];
+export interface Account {
+  id: string;
+  name: string;
+  profileName: string;
+  authType: AuthType;
+  region?: string;
+  output?: string;
+  logoPath?: string;
+  startUrl?: string;
+  awsAccountId?: string;
+  roleName?: string;
+  ssoRegion?: string;
+  ssoSessionName?: string;
+  expiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AccountFormData {
+  id?: string;
   profileName: string;
   authType: AuthType;
   accessKeyId: string;

@@ -1,26 +1,97 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { SsoDeviceAuthorizationEvent } from "../renderer/types";
+
+export interface AccountFormPayload {
+  profileName: string;
+  authType: "iam" | "sso";
+  accessKeyId: string;
+  secretAccessKey: string;
+  ssoStartUrl?: string;
+  ssoAccountId?: string;
+  ssoRoleName?: string;
+  ssoRegion?: string;
+  ssoSessionName?: string;
+  region: string;
+  output: string;
+  logoPath?: string;
+  displayName?: string;
+}
 
 export interface ElectronAPI {
   accounts: {
-    list: () => Promise<any>;
-    getActive: () => Promise<any>;
-    getAccessKey: (
-      profileName: string,
-    ) => Promise<{
+    list: () => Promise<{ success: boolean; data?: unknown[]; error?: string }>;
+    getActive: () => Promise<{ success: boolean; data?: string | null; error?: string }>;
+    getForEdit: (accountId: string) => Promise<{
       success: boolean;
-      data?: { accessKeyId: string } | null;
+      data?: { summary: unknown; accessKeyId?: string };
       error?: string;
     }>;
-    add: (data: any) => Promise<any>;
-    edit: (data: any) => Promise<any>;
-    delete: (profileName: string) => Promise<any>;
-    setActive: (profileName: string) => Promise<any>;
-    verify: (profileName: string) => Promise<any>;
-    ssoLogin: (profileName: string) => Promise<any>;
-    getSsoConfig: (profileName: string) => Promise<any>;
+    createIam: (data: Omit<AccountFormPayload, "authType" | "ssoStartUrl" | "ssoAccountId" | "ssoRoleName" | "ssoRegion" | "ssoSessionName"> & {
+      profileName: string;
+      displayName?: string;
+      accessKeyId: string;
+      secretAccessKey: string;
+      region: string;
+      output: string;
+      logoPath?: string;
+    }) => Promise<{ success: boolean; data?: { id: string }; error?: string }>;
+    createSso: (data: {
+      profileName: string;
+      displayName?: string;
+      ssoStartUrl: string;
+      ssoAccountId: string;
+      ssoRoleName: string;
+      ssoRegion?: string;
+      ssoSessionName?: string;
+      region: string;
+      output: string;
+      logoPath?: string;
+    }) => Promise<{ success: boolean; data?: { id: string }; error?: string }>;
+    updateIam: (data: {
+      id: string;
+      displayName?: string;
+      accessKeyId?: string;
+      secretAccessKey?: string;
+      region: string;
+      output: string;
+      logoPath?: string;
+    }) => Promise<{ success: boolean; error?: string }>;
+    updateSso: (data: {
+      id: string;
+      displayName?: string;
+      ssoStartUrl: string;
+      ssoAccountId: string;
+      ssoRoleName: string;
+      ssoRegion?: string;
+      ssoSessionName?: string;
+      region: string;
+      output: string;
+      logoPath?: string;
+    }) => Promise<{ success: boolean; error?: string }>;
+    delete: (accountId: string) => Promise<{ success: boolean; error?: string }>;
+    switch: (accountId: string) => Promise<{
+      success: boolean;
+      error?: string;
+      requiresSsoLogin?: boolean;
+      verified?: boolean;
+      identity?: { account: string; arn: string; userId?: string };
+    }>;
+    verify: (accountId: string) => Promise<{
+      success: boolean;
+      error?: string;
+      identity?: { account: string; arn: string; userId: string };
+    }>;
+    ssoLogin: (accountId: string) => Promise<{
+      success: boolean;
+      error?: string;
+      accessExpiryUnchanged?: boolean;
+    }>;
+    onSsoDeviceAuthorization: (
+      callback: (payload: SsoDeviceAuthorizationEvent) => void,
+    ) => () => void;
   };
   profiles: {
-    listFromAws: () => Promise<any>;
+    listFromAws: () => Promise<{ success: boolean; data?: string[]; error?: string }>;
   };
   dialog: {
     selectImageFile: () => Promise<{ canceled: boolean; filePath?: string }>;
@@ -34,8 +105,15 @@ export interface ElectronAPI {
     }>;
     openDataFolder: () => Promise<void>;
     getLogoDataUrl: (logoPath: string) => Promise<string | null>;
-    /** Subscribe to account/active-profile changes (e.g. from tray). Call returned function to unsubscribe. */
+    getEncryptionStatus: () => Promise<{ available: boolean; debug: string }>;
     onStateChanged: (callback: () => void) => () => void;
+    getLaunchAtLogin: () => Promise<{
+      openAtLogin: boolean;
+      osControlsApply: boolean;
+    }>;
+    setLaunchAtLogin: (enabled: boolean) => Promise<{ success: true }>;
+    getAppVersion: () => Promise<{ version: string }>;
+    getAppIconDataUrl: () => Promise<string | null>;
   };
 }
 
@@ -43,16 +121,22 @@ const api: ElectronAPI = {
   accounts: {
     list: () => ipcRenderer.invoke("accounts:list"),
     getActive: () => ipcRenderer.invoke("accounts:getActive"),
-    getAccessKey: (profileName) =>
-      ipcRenderer.invoke("accounts:getAccessKey", profileName),
-    add: (data) => ipcRenderer.invoke("accounts:add", data),
-    edit: (data) => ipcRenderer.invoke("accounts:edit", data),
-    delete: (profileName) => ipcRenderer.invoke("accounts:delete", profileName),
-    setActive: (profileName) =>
-      ipcRenderer.invoke("accounts:setActive", profileName),
-    verify: (profileName) => ipcRenderer.invoke("accounts:verify", profileName),
-    ssoLogin: (profileName) => ipcRenderer.invoke("accounts:ssoLogin", profileName),
-    getSsoConfig: (profileName) => ipcRenderer.invoke("accounts:getSsoConfig", profileName),
+    getForEdit: (accountId) => ipcRenderer.invoke("accounts:getForEdit", accountId),
+    createIam: (data) => ipcRenderer.invoke("accounts:createIam", data),
+    createSso: (data) => ipcRenderer.invoke("accounts:createSso", data),
+    updateIam: (data) => ipcRenderer.invoke("accounts:updateIam", data),
+    updateSso: (data) => ipcRenderer.invoke("accounts:updateSso", data),
+    delete: (accountId) => ipcRenderer.invoke("accounts:delete", accountId),
+    switch: (accountId) => ipcRenderer.invoke("accounts:switch", accountId),
+    verify: (accountId) => ipcRenderer.invoke("accounts:verify", accountId),
+    ssoLogin: (accountId) => ipcRenderer.invoke("accounts:ssoLogin", accountId),
+    onSsoDeviceAuthorization: (callback) => {
+      const handler = (_event: unknown, payload: SsoDeviceAuthorizationEvent) =>
+        { callback(payload); };
+      ipcRenderer.on("accounts:ssoDeviceAuthorization", handler);
+      return () =>
+        ipcRenderer.removeListener("accounts:ssoDeviceAuthorization", handler);
+    },
   },
   profiles: {
     listFromAws: () => ipcRenderer.invoke("profiles:listFromAws"),
@@ -63,13 +147,18 @@ const api: ElectronAPI = {
   app: {
     getDataPaths: () => ipcRenderer.invoke("app:getDataPaths"),
     openDataFolder: () => ipcRenderer.invoke("app:openDataFolder"),
-    getLogoDataUrl: (logoPath) =>
-      ipcRenderer.invoke("app:getLogoDataUrl", logoPath),
+    getLogoDataUrl: (logoPath) => ipcRenderer.invoke("app:getLogoDataUrl", logoPath),
+    getEncryptionStatus: () => ipcRenderer.invoke("app:getEncryptionStatus"),
     onStateChanged: (callback: () => void) => {
-      const handler = () => callback();
+      const handler = () => { callback(); };
       ipcRenderer.on("app:stateChanged", handler);
       return () => ipcRenderer.removeListener("app:stateChanged", handler);
     },
+    getLaunchAtLogin: () => ipcRenderer.invoke("app:getLaunchAtLogin"),
+    setLaunchAtLogin: (enabled: boolean) =>
+      ipcRenderer.invoke("app:setLaunchAtLogin", enabled),
+    getAppVersion: () => ipcRenderer.invoke("app:getAppVersion"),
+    getAppIconDataUrl: () => ipcRenderer.invoke("app:getAppIconDataUrl"),
   },
 };
 
