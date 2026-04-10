@@ -47,9 +47,13 @@ Uses system tray if supported. App data uses Electron **userData** (path is show
 
 ## Updating
 
-The app checks for updates automatically on startup. When a new version is available, it downloads in the background and a dialog asks whether to restart now or later. If you choose **Later**, the update installs the next time you quit the app (right-click tray → Quit).
+The app checks for updates automatically on startup. When a new version is available, it downloads in the background and a dialog asks whether to restart now or later. If you choose **Later**, the update installs the next time you quit the app (right-click tray → **Quit**).
 
 You can also update manually: download the latest installer from the [releases page](https://github.com/shalev396/AWSProfileManager/releases/latest) and run it. No need to uninstall first.
+
+### Troubleshooting updates
+
+If an update doesn't appear, open **Settings → Application logs → Open folder** and check `main.log` for details.
 
 ## Build installers (optional)
 
