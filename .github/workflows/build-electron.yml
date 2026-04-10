@@ -129,3 +129,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit ${{ needs.prepare.outputs.tag }} --draft=false
+
+  cleanup-failed-release:
+    name: Clean Up Failed Release
+    needs: [prepare, build]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Delete draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete ${{ needs.prepare.outputs.tag }} --yes || true
+
+      - name: Delete orphaned tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: git push origin --delete ${{ needs.prepare.outputs.tag }} 2>/dev/null || true
