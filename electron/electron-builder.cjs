@@ -9,13 +9,24 @@ try {
   // dotenv not installed in some edge layouts; CI does not need it
 }
 
-// Use GitHub secret names locally and in CI: APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD.
-// electron-builder only reads CSC_LINK / CSC_KEY_PASSWORD for the .p12; copy over if not set explicitly.
-if (!process.env.CSC_LINK && process.env.APPLE_CERTIFICATE) {
-  process.env.CSC_LINK = process.env.APPLE_CERTIFICATE;
-}
-if (!process.env.CSC_KEY_PASSWORD && process.env.APPLE_CERTIFICATE_PASSWORD) {
-  process.env.CSC_KEY_PASSWORD = process.env.APPLE_CERTIFICATE_PASSWORD;
+// CSC_LINK / CSC_KEY_PASSWORD are what electron-builder reads for code-signing.
+// We map APPLE_CERTIFICATE → CSC_LINK, but ONLY on macOS. On Windows the Apple
+// Developer ID cert is not trusted by the OS certificate store, which causes
+// electron-updater's Authenticode verification to reject the downloaded update.
+//
+// If you purchase a Windows (Authenticode) code-signing certificate:
+//   1. Add WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD secrets to the repo.
+//   2. Add a `process.platform === "win32"` block here that maps them to
+//      CSC_LINK / CSC_KEY_PASSWORD (same pattern as the macOS block below).
+//   3. Remove the `verifyUpdateCodeSignature = false` line in src/main/index.ts
+//      so electron-updater validates the trusted Windows signature.
+if (process.platform === "darwin") {
+  if (!process.env.CSC_LINK && process.env.APPLE_CERTIFICATE) {
+    process.env.CSC_LINK = process.env.APPLE_CERTIFICATE;
+  }
+  if (!process.env.CSC_KEY_PASSWORD && process.env.APPLE_CERTIFICATE_PASSWORD) {
+    process.env.CSC_KEY_PASSWORD = process.env.APPLE_CERTIFICATE_PASSWORD;
+  }
 }
 
 /**
