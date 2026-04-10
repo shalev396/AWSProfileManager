@@ -1,5 +1,7 @@
 # AWS Profile Manager (Desktop App)
 
+> **Disclaimer:** This is an unofficial, community-built tool. It is not affiliated with, endorsed by, or sponsored by Amazon Web Services (AWS) or Amazon.com, Inc. "AWS" and related names are trademarks of Amazon.com, Inc.
+
 Desktop app to manage AWS CLI profiles. Switch between multiple AWS accounts from your system tray.
 
 **Supported:** Windows, macOS (Intel and Apple Silicon), Linux.

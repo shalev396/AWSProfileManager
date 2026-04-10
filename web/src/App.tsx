@@ -87,7 +87,7 @@ function App() {
                     {download.platform === "windows" && "64-bit"}
                     {download.platform === "linux" && "AppImage"}
                   </p>
-                  <a href={download.url} className="download-btn" download>
+                  <a href={download.url} className="download-btn">
                     <span className="btn-text">
                       Download{" "}
                       {download.filename.split(".").pop()?.toUpperCase()}
@@ -170,6 +170,10 @@ function App() {
             >
               Report Issue
             </a>
+          </p>
+          <p className="disclaimer">
+            Not affiliated with, endorsed by, or sponsored by Amazon Web
+            Services (AWS) or Amazon.com, Inc.
           </p>
         </div>
       </footer>

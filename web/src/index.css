@@ -261,6 +261,7 @@ footer a {
   margin: 0 8px;
 }
 footer a:hover { text-decoration: underline; }
+footer .disclaimer { opacity: 0.6; font-size: 11px; margin-top: 12px; }
 
 @media (max-width: 768px) {
   .hero h2 { font-size: 28px; }

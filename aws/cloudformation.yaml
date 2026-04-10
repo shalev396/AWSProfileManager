@@ -11,10 +11,6 @@ Parameters:
     Type: String
     Description: S3 bucket name for hosting the static website (from secrets)
 
-  BinariesBucketName:
-    Type: String
-    Description: S3 bucket name for hosting application binaries (from secrets)
-
   DomainName:
     Type: String
     Description: Custom domain name for CloudFront distribution (e.g., downloads.example.com)
@@ -75,49 +71,6 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub '${WebsiteBucket.Arn}/*'
 
-  # S3 Bucket for Application Binaries
-  BinariesBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Ref BinariesBucketName
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldVersions
-            Status: Enabled
-            NoncurrentVersionExpirationInDays: 90
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders: ['*']
-            AllowedMethods: [GET, HEAD]
-            AllowedOrigins: ['*']
-            MaxAge: 3600
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Purpose
-          Value: Application Binaries
-
-  # Bucket Policy for Binaries Bucket - Public Read Access
-  BinariesBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref BinariesBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: PublicReadGetObject
-            Effect: Allow
-            Principal: '*'
-            Action: s3:GetObject
-            Resource: !Sub '${BinariesBucket.Arn}/*'
-
   # ================================
   # CLOUDFRONT DISTRIBUTION
   # ================================
@@ -150,12 +103,6 @@ Resources:
             S3OriginConfig:
               OriginAccessIdentity: ''
 
-          # Binaries Origin (installers)
-          - Id: BinariesOrigin
-            DomainName: !GetAtt BinariesBucket.RegionalDomainName
-            S3OriginConfig:
-              OriginAccessIdentity: ''
-
         # Default Cache Behavior (Website) - respect origin Cache-Control (long for assets, short for HTML)
         DefaultCacheBehavior:
           TargetOriginId: WebsiteOrigin
@@ -165,18 +112,6 @@ Resources:
           Compress: true
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized (respects origin headers)
           OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf # Managed-CORS-S3Origin
-
-        # Cache Behaviors
-        CacheBehaviors:
-          # Downloads path behavior
-          - PathPattern: '/downloads/*'
-            TargetOriginId: BinariesOrigin
-            ViewerProtocolPolicy: redirect-to-https
-            AllowedMethods: [GET, HEAD]
-            CachedMethods: [GET, HEAD]
-            Compress: true
-            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
-            OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf # Managed-CORS-S3Origin
 
         # Custom Error Responses (SPA routing support)
         CustomErrorResponses:
@@ -216,12 +151,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-WebsiteBucket'
 
-  BinariesBucketName:
-    Description: Name of the S3 bucket hosting the binaries
-    Value: !Ref BinariesBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-BinariesBucket'
-
   CloudFrontDistributionId:
     Description: CloudFront Distribution ID
     Value: !Ref CloudFrontDistribution
@@ -240,20 +169,9 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-WebsiteURL'
 
-  DownloadsURL:
-    Description: Downloads URL
-    Value: !Sub 'https://${DomainName}/downloads/'
-    Export:
-      Name: !Sub '${AWS::StackName}-DownloadsURL'
-
   WebsiteBucketArn:
     Description: ARN of the website bucket
     Value: !GetAtt WebsiteBucket.Arn
     Export:
       Name: !Sub '${AWS::StackName}-WebsiteBucketArn'
 
-  BinariesBucketArn:
-    Description: ARN of the binaries bucket
-    Value: !GetAtt BinariesBucket.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-BinariesBucketArn'

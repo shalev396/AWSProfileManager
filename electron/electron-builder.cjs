@@ -43,17 +43,22 @@ module.exports = {
   directories: {
     output: "dist",
   },
+  publish: {
+    provider: "github",
+    owner: "shalev396",
+    repo: "AWSProfileManager",
+  },
   asarUnpack: ["**/node_modules/better-sqlite3/**"],
   files: ["out", "assets/**"],
   mac: {
     icon: "assets/icon.png",
     category: "public.app-category.developer-tools",
-    target: ["dmg"],
+    target: ["dmg", "zip"],
+    artifactName: "AWS-Profile-Manager.${ext}",
     hardenedRuntime: true,
     gatekeeperAssess: false,
     entitlements: "build/entitlements.mac.plist",
     entitlementsInherit: "build/entitlements.mac.plist",
-    // electron-builder 26: must be boolean; team ID comes from env (see getNotarizeOptions in app-builder-lib).
     notarize: macNotarizeEnabled(),
     extendInfo: {
       CFBundleName: "AWS Profile Manager",
@@ -64,6 +69,7 @@ module.exports = {
   win: {
     icon: "assets/icon.png",
     target: ["nsis"],
+    artifactName: "AWS-Profile-Manager-Setup.${ext}",
     signtoolOptions: {
       publisherName: "Shalev Ben Moshe",
     },
@@ -76,6 +82,7 @@ module.exports = {
   linux: {
     icon: "assets/icon.png",
     target: ["AppImage"],
+    artifactName: "AWS-Profile-Manager.${ext}",
     category: "Development",
     maintainer: "Shalev Ben Moshe",
     synopsis: "Manage and switch AWS CLI profiles",
