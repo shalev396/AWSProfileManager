@@ -1,6 +1,12 @@
 import { app, BrowserWindow, dialog } from 'electron';
 import * as path from 'path';
-import { autoUpdater } from 'electron-updater';
+import electronUpdater, { type AppUpdater } from 'electron-updater';
+import log from 'electron-log';
+
+function getAutoUpdater(): AppUpdater {
+  const { autoUpdater } = electronUpdater;
+  return autoUpdater;
+}
 import { ensureAwsDir } from './awsFiles';
 import { loadAppNativeImage, resolveRasterIconPath } from './appIcon';
 import { openDatabase } from './db/sqlite';
@@ -175,20 +181,13 @@ if (!gotSingleInstanceLock) {
       setupIpcHandlers(mainWindow);
 
       if (!process.env.ELECTRON_RENDERER_URL) {
-        autoUpdater.setFeedURL({
-          provider: 'github',
-          owner: 'shalev396',
-          repo: 'AWSProfileManager',
-        });
+        const autoUpdater = getAutoUpdater();
+        log.transports.file.level = 'info';
+        autoUpdater.logger = log;
         autoUpdater.autoDownload = true;
         autoUpdater.autoInstallOnAppQuit = true;
 
-        autoUpdater.on('update-available', (info) => {
-          console.log('Update available:', info.version);
-        });
-
         autoUpdater.on('update-downloaded', (info) => {
-          console.log('Update downloaded:', info.version);
           dialog
             .showMessageBox({
               type: 'info',
@@ -206,13 +205,7 @@ if (!gotSingleInstanceLock) {
             });
         });
 
-        autoUpdater.on('error', (err) => {
-          console.error('Auto-updater error:', err.message);
-        });
-
-        autoUpdater.checkForUpdates().catch((err) => {
-          console.error('Update check failed:', err.message);
-        });
+        autoUpdater.checkForUpdatesAndNotify();
       }
 
       app.on('activate', () => {
