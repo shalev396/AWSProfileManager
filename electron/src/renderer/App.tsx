@@ -373,6 +373,7 @@ const App: React.FC = () => {
                 launchAtLogin={launchAtLogin}
                 launchAtLoginOsApplies={launchAtLoginOsApplies}
                 onOpenDataFolder={() => window.electron.app.openDataFolder()}
+                onOpenLogFolder={() => window.electron.app.openLogFolder()}
                 onLaunchAtLoginChange={(enabled) =>
                   void handleLaunchAtLoginChange(enabled)
                 }

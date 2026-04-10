@@ -82,6 +82,11 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
     await shell.openPath(getUserDataRoot());
   });
 
+  ipcMain.handle('app:openLogFolder', async () => {
+    const logPath = path.join(app.getPath('userData'), 'logs');
+    await shell.openPath(logPath);
+  });
+
   ipcMain.handle('app:getAppVersion', async () => ({ version: app.getVersion() }));
 
   ipcMain.handle('app:getAppIconDataUrl', async () => {

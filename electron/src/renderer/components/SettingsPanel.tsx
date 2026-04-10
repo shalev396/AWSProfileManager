@@ -14,6 +14,7 @@ export interface SettingsPanelProps {
   launchAtLogin: boolean;
   launchAtLoginOsApplies: boolean;
   onOpenDataFolder: () => void;
+  onOpenLogFolder: () => void;
   onLaunchAtLoginChange: (enabled: boolean) => void;
 }
 
@@ -23,6 +24,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   launchAtLogin,
   launchAtLoginOsApplies,
   onOpenDataFolder,
+  onOpenLogFolder,
   onLaunchAtLoginChange,
 }) => {
   return (
@@ -69,6 +71,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             />
             <span style={styles.toggleLabel}>Enabled</span>
           </label>
+        </li>
+        <li style={styles.row}>
+          <div style={styles.rowBody}>
+            <div style={styles.rowTitle}>Application logs</div>
+            <p style={styles.rowDesc}>
+              Diagnostic logs including auto-update activity. Useful for
+              troubleshooting issues with the app.
+            </p>
+          </div>
+          <button type="button" style={styles.primaryBtn} onClick={onOpenLogFolder}>
+            Open folder
+          </button>
         </li>
       </ul>
     </div>
