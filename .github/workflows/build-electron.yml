@@ -78,7 +78,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
