@@ -16,7 +16,7 @@ Pick the installer for your OS: Windows (`.exe`), macOS (`.dmg`), or Linux (`.Ap
 
 ## Run locally (development)
 
-**Prerequisites:** Node.js 18+ ([download](https://nodejs.org/)).
+**Prerequisites:** Node.js 20+ ([download](https://nodejs.org/)).
 
 ```bash
 npm install
