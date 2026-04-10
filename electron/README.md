@@ -53,7 +53,7 @@ You can also update manually: download the latest installer from the [releases p
 
 ### Troubleshooting updates
 
-If an update doesn't appear, open **Settings → Application logs → Open folder** and check `main.log` for details.
+If an update doesn't appear, open **Settings → Application logs → Open folder** and check `main.log` for diagnostic details from the auto-updater.
 
 ## Build installers (optional)
 
