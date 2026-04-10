@@ -1,0 +1,41 @@
+name: Deploy Infrastructure
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "aws/**"
+      - ".github/workflows/deploy-infra.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy CloudFormation Stack
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      STACK_NAME: ${{ secrets.STACK_NAME }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/my-github-actions-role
+
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --template-file aws/cloudformation.yaml \
+            --stack-name "$STACK_NAME" \
+            --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM
