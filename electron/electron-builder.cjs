@@ -81,9 +81,11 @@ module.exports = {
     icon: "assets/icon.png",
     target: ["nsis"],
     artifactName: "AWS-Profile-Manager-Setup.${ext}",
-    signtoolOptions: {
-      publisherName: "Shalev Ben Moshe",
-    },
+    // No Authenticode certificate yet — omitting signtoolOptions so
+    // publisherName doesn't end up in app-update.yml (which would
+    // make electron-updater attempt signature verification against
+    // an unsigned exe). If you add a Windows code-signing cert later,
+    // restore: signtoolOptions: { publisherName: "Shalev Ben Moshe" }
   },
   nsis: {
     oneClick: false,
