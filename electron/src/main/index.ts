@@ -175,6 +175,11 @@ if (!gotSingleInstanceLock) {
       setupIpcHandlers(mainWindow);
 
       if (!process.env.ELECTRON_RENDERER_URL) {
+        autoUpdater.setFeedURL({
+          provider: 'github',
+          owner: 'shalev396',
+          repo: 'AWSProfileManager',
+        });
         autoUpdater.autoDownload = true;
         autoUpdater.autoInstallOnAppQuit = true;
 
