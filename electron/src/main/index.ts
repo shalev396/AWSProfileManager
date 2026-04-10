@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import * as path from 'path';
+import { autoUpdater } from 'electron-updater';
 import { ensureAwsDir } from './awsFiles';
 import { loadAppNativeImage, resolveRasterIconPath } from './appIcon';
 import { openDatabase } from './db/sqlite';
@@ -172,6 +173,10 @@ if (!gotSingleInstanceLock) {
 
       createWindow(appIcon);
       setupIpcHandlers(mainWindow);
+
+      if (!process.env.ELECTRON_RENDERER_URL) {
+        autoUpdater.checkForUpdatesAndNotify();
+      }
 
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {

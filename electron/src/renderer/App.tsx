@@ -386,6 +386,9 @@ const App: React.FC = () => {
           <footer style={styles.statusBar}>
             <span style={styles.statusLeft}>
               {accounts.length} profile{accounts.length === 1 ? "" : "s"} configured
+              <span style={styles.disclaimer}>
+                {" · "}Not affiliated with AWS or Amazon.com, Inc.
+              </span>
             </span>
             <span style={styles.statusRight}>
               {appVersion ? `v${appVersion}` : ""}
@@ -591,6 +594,10 @@ const styles = {
     flexShrink: 0,
     fontWeight: 600,
     color: "#9ca3af",
+  } as React.CSSProperties,
+  disclaimer: {
+    opacity: 0.6,
+    fontWeight: 400,
   } as React.CSSProperties,
   settingsLoading: {
     padding: "32px 20px",

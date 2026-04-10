@@ -1,8 +1,7 @@
-name: Build and Deploy Electron Apps
+name: Build and Release Electron App
 
 permissions:
-  id-token: write
-  contents: read
+  contents: write
 
 on:
   push:
@@ -13,18 +12,72 @@ on:
       - ".github/workflows/build-electron.yml"
   workflow_dispatch:
 
-env:
-  AWS_REGION: ${{ vars.AWS_REGION  }}
-  STACK_NAME: ${{ secrets.STACK_NAME }}
-
 jobs:
-  build-mac:
-    name: Build macOS
-    runs-on: macos-latest
+  prepare:
+    name: Bump Version & Create Draft Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump patch version
+        id: bump
+        working-directory: ./electron
+        run: |
+          NEW_VERSION=$(npm version patch --no-git-tag-version)
+          VERSION="${NEW_VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Bumped to $VERSION"
+
+      - name: Commit, tag, and push
+        run: |
+          git add electron/package.json electron/package-lock.json
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git tag ${{ steps.bump.outputs.tag }}
+          git push origin main --follow-tags
+
+      - name: Create draft GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ steps.bump.outputs.tag }} \
+            --draft \
+            --title "${{ steps.bump.outputs.tag }}" \
+            --generate-notes
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: prepare
+    strategy:
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            cmd: package:mac
+          - name: Windows
+            os: windows-latest
+            cmd: package:win
+          - name: Linux
+            os: ubuntu-latest
+            cmd: package:linux
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -41,192 +94,37 @@ jobs:
         working-directory: ./electron
         run: npm run build
 
-      - name: Package for macOS
+      - name: Package & publish to GitHub Release
         working-directory: ./electron
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run package:mac
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/my-github-actions-role
-
-      - name: Get S3 Bucket and CloudFront ID
-        id: s3
-        run: |
-          S3_BUCKET=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='BinariesBucketName'].OutputValue" --output text)
-          CF_ID=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" --output text)
-          echo "bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
-          echo "cf_id=$CF_ID" >> $GITHUB_OUTPUT
-
-      - name: Remove existing file (so new upload replaces old version)
-        run: |
-          aws s3 rm s3://${{ steps.s3.outputs.bucket }}/downloads/mac/AWS-Profile-Manager.dmg || true
-
-      - name: Upload to S3
-        working-directory: ./electron
-        run: |
-          DMG=$(ls dist/*.dmg 2>/dev/null | head -1)
-          aws s3 cp "$DMG" s3://${{ steps.s3.outputs.bucket }}/downloads/mac/AWS-Profile-Manager.dmg \
-            --content-type "application/octet-stream"
-
-      - name: Invalidate CloudFront cache
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ steps.s3.outputs.cf_id }} \
-            --paths "/downloads/mac/*"
+        run: npx electron-builder --config electron-builder.cjs --publish always
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-dmg
-          path: electron/dist/*.dmg
+          name: ${{ matrix.name }}-build
+          path: |
+            electron/dist/*.dmg
+            electron/dist/*.zip
+            electron/dist/*.exe
+            electron/dist/*.AppImage
           retention-days: 30
 
-  build-windows:
-    name: Build Windows
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: electron/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ./electron
-        run: npm ci
-
-      - name: Build Electron app
-        working-directory: ./electron
-        run: npm run build
-
-      - name: Package for Windows
-        working-directory: ./electron
-        run: npm run package:win
-
-      # Auth: OIDC only (no long-lived access keys). GitHub issues an id-token,
-      # we assume my-github-actions-role; the action sets temporary AWS_* env vars.
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/my-github-actions-role
-
-      # On Windows, AWS CLI can use a different default region in bash, causing
-      # SignatureDoesNotMatch; passing --region on every aws call fixes it.
-      - name: Verify AWS credentials (debug)
-        shell: bash
-        run: aws sts get-caller-identity --region ${{ env.AWS_REGION }}
-
-      - name: Get S3 Bucket and CloudFront ID
-        id: s3
-        shell: bash
-        run: |
-          S3_BUCKET=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='BinariesBucketName'].OutputValue" --output text --region ${{ env.AWS_REGION }})
-          CF_ID=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" --output text --region ${{ env.AWS_REGION }})
-          echo "bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
-          echo "cf_id=$CF_ID" >> $GITHUB_OUTPUT
-
-      - name: Remove existing file (so new upload replaces old version)
-        shell: bash
-        run: |
-          aws s3 rm s3://${{ steps.s3.outputs.bucket }}/downloads/win/AWS-Profile-Manager-Setup.exe --region ${{ env.AWS_REGION }} || true
-
-      - name: Upload to S3
-        working-directory: ./electron
-        shell: bash
-        run: |
-          EXE=$(ls dist/*.exe 2>/dev/null | head -1)
-          aws s3 cp "$EXE" s3://${{ steps.s3.outputs.bucket }}/downloads/win/AWS-Profile-Manager-Setup.exe \
-            --content-type "application/octet-stream" --region ${{ env.AWS_REGION }}
-
-      - name: Invalidate CloudFront cache
-        shell: bash
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ steps.s3.outputs.cf_id }} \
-            --paths "/downloads/win/*"
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-exe
-          path: electron/dist/*.exe
-          retention-days: 30
-
-  build-linux:
-    name: Build Linux
+  publish-release:
+    name: Publish Release
+    needs: [prepare, build]
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: electron/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ./electron
-        run: npm ci
-
-      - name: Build Electron app
-        working-directory: ./electron
-        run: npm run build
-
-      - name: Package for Linux
-        working-directory: ./electron
-        run: npm run package:linux
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/my-github-actions-role
-
-      - name: Get S3 Bucket and CloudFront ID
-        id: s3
-        run: |
-          S3_BUCKET=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='BinariesBucketName'].OutputValue" --output text)
-          CF_ID=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" --output text)
-          echo "bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
-          echo "cf_id=$CF_ID" >> $GITHUB_OUTPUT
-
-      - name: Remove existing file (so new upload replaces old version)
-        run: |
-          aws s3 rm s3://${{ steps.s3.outputs.bucket }}/downloads/linux/AWS-Profile-Manager.AppImage || true
-
-      - name: Upload to S3
-        working-directory: ./electron
-        run: |
-          APPIMAGE=$(ls dist/*.AppImage 2>/dev/null | head -1)
-          aws s3 cp "$APPIMAGE" s3://${{ steps.s3.outputs.bucket }}/downloads/linux/AWS-Profile-Manager.AppImage \
-            --content-type "application/octet-stream"
-
-      - name: Invalidate CloudFront cache
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ steps.s3.outputs.cf_id }} \
-            --paths "/downloads/linux/*"
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-appimage
-          path: electron/dist/*.AppImage
-          retention-days: 30
+      - name: Undraft the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit ${{ needs.prepare.outputs.tag }} --draft=false
