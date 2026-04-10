@@ -27,7 +27,9 @@
   },
   "overrides": {
     "tar": "^7.5.12",
-    "rollup": "^4.53.3"
+    "rollup": "^4.58.1",
+    "lodash": "^4.18.1",
+    "@xmldom/xmldom": "^0.9.9"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -38,7 +40,7 @@
     "@types/react-dom": "^18.2.18",
     "@vitejs/plugin-react": "^5.1.1",
     "dotenv": "^16.4.5",
-    "electron": "^35.7.5",
+    "electron": "^41.1.1",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
@@ -49,6 +51,6 @@
     "react-dom": "^18.2.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^7.0.4"
+    "vite": "^7.3.2"
   }
 }
