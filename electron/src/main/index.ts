@@ -186,6 +186,14 @@ if (!gotSingleInstanceLock) {
         autoUpdater.logger = log;
         autoUpdater.autoDownload = true;
         autoUpdater.autoInstallOnAppQuit = true;
+        // Windows exe is currently unsigned (no Authenticode certificate).
+        // Without this, electron-updater rejects the download because it can't
+        // build a trusted certificate chain. If you add a Windows code-signing
+        // cert later, remove this block and let verification run normally.
+        // See also: electron-builder.cjs for the cert-mapping setup instructions.
+        if (process.platform === 'win32') {
+          (autoUpdater as unknown as { verifyUpdateCodeSignature: boolean }).verifyUpdateCodeSignature = false;
+        }
 
         autoUpdater.on('update-downloaded', (info) => {
           dialog
