@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import * as path from 'path';
 import { autoUpdater } from 'electron-updater';
 import { ensureAwsDir } from './awsFiles';
@@ -175,7 +175,39 @@ if (!gotSingleInstanceLock) {
       setupIpcHandlers(mainWindow);
 
       if (!process.env.ELECTRON_RENDERER_URL) {
-        autoUpdater.checkForUpdatesAndNotify();
+        autoUpdater.autoDownload = true;
+        autoUpdater.autoInstallOnAppQuit = true;
+
+        autoUpdater.on('update-available', (info) => {
+          console.log('Update available:', info.version);
+        });
+
+        autoUpdater.on('update-downloaded', (info) => {
+          console.log('Update downloaded:', info.version);
+          dialog
+            .showMessageBox({
+              type: 'info',
+              title: 'Update Ready',
+              message: `Version ${info.version} has been downloaded.`,
+              detail: 'It will be installed when you quit the app. Restart now?',
+              buttons: ['Restart Now', 'Later'],
+              defaultId: 0,
+            })
+            .then(({ response }) => {
+              if (response === 0) {
+                isQuitting = true;
+                autoUpdater.quitAndInstall();
+              }
+            });
+        });
+
+        autoUpdater.on('error', (err) => {
+          console.error('Auto-updater error:', err.message);
+        });
+
+        autoUpdater.checkForUpdates().catch((err) => {
+          console.error('Update check failed:', err.message);
+        });
       }
 
       app.on('activate', () => {
