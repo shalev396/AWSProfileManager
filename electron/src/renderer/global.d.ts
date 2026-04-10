@@ -100,6 +100,7 @@ declare global {
           awsConfig: string;
         }>;
         openDataFolder: () => Promise<void>;
+        openLogFolder: () => Promise<void>;
         getLogoDataUrl: (logoPath: string) => Promise<string | null>;
         getEncryptionStatus: () => Promise<{ available: boolean; debug: string }>;
         onStateChanged: (callback: () => void) => () => void;

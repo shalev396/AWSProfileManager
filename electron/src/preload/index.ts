@@ -20,21 +20,35 @@ export interface AccountFormPayload {
 export interface ElectronAPI {
   accounts: {
     list: () => Promise<{ success: boolean; data?: unknown[]; error?: string }>;
-    getActive: () => Promise<{ success: boolean; data?: string | null; error?: string }>;
+    getActive: () => Promise<{
+      success: boolean;
+      data?: string | null;
+      error?: string;
+    }>;
     getForEdit: (accountId: string) => Promise<{
       success: boolean;
       data?: { summary: unknown; accessKeyId?: string };
       error?: string;
     }>;
-    createIam: (data: Omit<AccountFormPayload, "authType" | "ssoStartUrl" | "ssoAccountId" | "ssoRoleName" | "ssoRegion" | "ssoSessionName"> & {
-      profileName: string;
-      displayName?: string;
-      accessKeyId: string;
-      secretAccessKey: string;
-      region: string;
-      output: string;
-      logoPath?: string;
-    }) => Promise<{ success: boolean; data?: { id: string }; error?: string }>;
+    createIam: (
+      data: Omit<
+        AccountFormPayload,
+        | "authType"
+        | "ssoStartUrl"
+        | "ssoAccountId"
+        | "ssoRoleName"
+        | "ssoRegion"
+        | "ssoSessionName"
+      > & {
+        profileName: string;
+        displayName?: string;
+        accessKeyId: string;
+        secretAccessKey: string;
+        region: string;
+        output: string;
+        logoPath?: string;
+      },
+    ) => Promise<{ success: boolean; data?: { id: string }; error?: string }>;
     createSso: (data: {
       profileName: string;
       displayName?: string;
@@ -68,7 +82,9 @@ export interface ElectronAPI {
       output: string;
       logoPath?: string;
     }) => Promise<{ success: boolean; error?: string }>;
-    delete: (accountId: string) => Promise<{ success: boolean; error?: string }>;
+    delete: (
+      accountId: string,
+    ) => Promise<{ success: boolean; error?: string }>;
     switch: (accountId: string) => Promise<{
       success: boolean;
       error?: string;
@@ -91,7 +107,11 @@ export interface ElectronAPI {
     ) => () => void;
   };
   profiles: {
-    listFromAws: () => Promise<{ success: boolean; data?: string[]; error?: string }>;
+    listFromAws: () => Promise<{
+      success: boolean;
+      data?: string[];
+      error?: string;
+    }>;
   };
   dialog: {
     selectImageFile: () => Promise<{ canceled: boolean; filePath?: string }>;
@@ -104,6 +124,7 @@ export interface ElectronAPI {
       awsConfig: string;
     }>;
     openDataFolder: () => Promise<void>;
+    openLogFolder: () => Promise<void>;
     getLogoDataUrl: (logoPath: string) => Promise<string | null>;
     getEncryptionStatus: () => Promise<{ available: boolean; debug: string }>;
     onStateChanged: (callback: () => void) => () => void;
@@ -121,7 +142,8 @@ const api: ElectronAPI = {
   accounts: {
     list: () => ipcRenderer.invoke("accounts:list"),
     getActive: () => ipcRenderer.invoke("accounts:getActive"),
-    getForEdit: (accountId) => ipcRenderer.invoke("accounts:getForEdit", accountId),
+    getForEdit: (accountId) =>
+      ipcRenderer.invoke("accounts:getForEdit", accountId),
     createIam: (data) => ipcRenderer.invoke("accounts:createIam", data),
     createSso: (data) => ipcRenderer.invoke("accounts:createSso", data),
     updateIam: (data) => ipcRenderer.invoke("accounts:updateIam", data),
@@ -131,8 +153,12 @@ const api: ElectronAPI = {
     verify: (accountId) => ipcRenderer.invoke("accounts:verify", accountId),
     ssoLogin: (accountId) => ipcRenderer.invoke("accounts:ssoLogin", accountId),
     onSsoDeviceAuthorization: (callback) => {
-      const handler = (_event: unknown, payload: SsoDeviceAuthorizationEvent) =>
-        { callback(payload); };
+      const handler = (
+        _event: unknown,
+        payload: SsoDeviceAuthorizationEvent,
+      ) => {
+        callback(payload);
+      };
       ipcRenderer.on("accounts:ssoDeviceAuthorization", handler);
       return () =>
         ipcRenderer.removeListener("accounts:ssoDeviceAuthorization", handler);
@@ -147,10 +173,14 @@ const api: ElectronAPI = {
   app: {
     getDataPaths: () => ipcRenderer.invoke("app:getDataPaths"),
     openDataFolder: () => ipcRenderer.invoke("app:openDataFolder"),
-    getLogoDataUrl: (logoPath) => ipcRenderer.invoke("app:getLogoDataUrl", logoPath),
+    openLogFolder: () => ipcRenderer.invoke("app:openLogFolder"),
+    getLogoDataUrl: (logoPath) =>
+      ipcRenderer.invoke("app:getLogoDataUrl", logoPath),
     getEncryptionStatus: () => ipcRenderer.invoke("app:getEncryptionStatus"),
     onStateChanged: (callback: () => void) => {
-      const handler = () => { callback(); };
+      const handler = () => {
+        callback();
+      };
       ipcRenderer.on("app:stateChanged", handler);
       return () => ipcRenderer.removeListener("app:stateChanged", handler);
     },
