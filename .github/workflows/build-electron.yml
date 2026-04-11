@@ -86,6 +86,10 @@ jobs:
         working-directory: ./electron
         run: npm ci
 
+      - name: Inject tag version into package.json
+        working-directory: ./electron
+        run: npm pkg set "version=${{ needs.prepare.outputs.version }}"
+
       - name: Build Electron app
         working-directory: ./electron
         run: npm run build
@@ -99,7 +103,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx electron-builder --config electron-builder.cjs -c.extraMetadata.version=${{ needs.prepare.outputs.version }} --publish always
+        run: npx electron-builder --config electron-builder.cjs --publish always
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
