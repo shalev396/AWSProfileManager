@@ -1,6 +1,7 @@
 import { app, ipcMain, dialog, BrowserWindow, shell } from 'electron';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import log from 'electron-log';
 import * as awsFiles from '../awsFiles';
 import { getUserDataRoot, getLogosDir } from '../bootstrap/appPaths';
 import { getAccountService } from '../accounts/accountService';
@@ -12,6 +13,7 @@ import {
 } from '../settings/appPreferences';
 import { getAssetsDir } from '../appIcon';
 import type { SsoDeviceAuthorizationStarted } from '../aws/awsMainProcess';
+import { formatAwsSdkError } from '../aws/awsErrors';
 
 let mainWindowRef: BrowserWindow | null = null;
 let trayUpdateCallback: (() => void) | null = null;
@@ -424,7 +426,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow | null): void {
       notifyRendererStateChanged();
       return { success: true, accessExpiryUnchanged };
     } catch (error: unknown) {
-      return { success: false, error: (error as Error).message || 'SSO login failed' };
+      log.error('[accounts:ssoLogin]', error);
+      return { success: false, error: formatAwsSdkError(error) || 'SSO login failed' };
     }
   });
 }

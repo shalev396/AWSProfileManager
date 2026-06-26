@@ -7,6 +7,7 @@ import {
   CreateTokenCommand,
 } from '@aws-sdk/client-sso-oidc';
 import type { ResolvedAccount, IamSecretPayload, SsoSecretPayload } from '../accounts/types';
+import { formatAwsSdkError, isOidcRegistrationExpired } from './awsErrors';
 
 export async function ensureOidcRegistration(
   ssoRegion: string,
@@ -16,12 +17,16 @@ export async function ensureOidcRegistration(
     oidcRegistrationExpiresAt?: string;
   },
 ): Promise<{ clientId: string; clientSecret: string; registrationExpiresAt?: string }> {
-  if (existing?.oidcClientId && existing?.oidcClientSecret !== undefined) {
+  const hasUsableRegistration =
+    existing?.oidcClientId &&
+    existing.oidcClientSecret !== undefined &&
+    !isOidcRegistrationExpired(existing.oidcRegistrationExpiresAt);
+  if (hasUsableRegistration) {
     return {
-      clientId: existing.oidcClientId,
-      clientSecret: existing.oidcClientSecret,
-      ...(existing.oidcRegistrationExpiresAt !== undefined
-        ? { registrationExpiresAt: existing.oidcRegistrationExpiresAt }
+      clientId: existing!.oidcClientId!,
+      clientSecret: existing!.oidcClientSecret!,
+      ...(existing!.oidcRegistrationExpiresAt !== undefined
+        ? { registrationExpiresAt: existing!.oidcRegistrationExpiresAt }
         : {}),
     };
   }
@@ -184,7 +189,13 @@ export async function pollSsoDeviceAuthorization(params: {
       if (name === 'ExpiredTokenException') {
         throw new Error('Device authorization expired; try SSO Login again.');
       }
-      throw e;
+      if (name === 'InvalidClientException') {
+        throw e;
+      }
+      if (name === 'InvalidGrantException') {
+        throw new Error(formatAwsSdkError(e));
+      }
+      throw new Error(formatAwsSdkError(e));
     }
   }
   throw new Error('SSO login timed out waiting for browser authorization.');
