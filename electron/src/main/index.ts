@@ -31,6 +31,8 @@ if (process.platform === 'win32') {
   app.setAppUserModelId(APP_USER_MODEL_ID);
 }
 
+log.transports.file.level = 'info';
+
 /** Focus the one main window (tray “Manage”, shortcut, or second app launch). */
 function showExistingMainWindow(): void {
   const win =

@@ -8,6 +8,7 @@ import {
   getCallerIdentityForResolvedAccount,
   type SsoDeviceAuthorizationStarted,
 } from '../aws/awsMainProcess';
+import { formatAwsSdkError, isInvalidClientError } from '../aws/awsErrors';
 import { getSecretService, isEncryptionAvailable } from '../security/secretService';
 import { getAccountRepository } from './accountRepository';
 import type { AccountRow, AccountSummary, IamSecretPayload, ResolvedAccount, SsoSecretPayload } from './types';
@@ -570,7 +571,7 @@ export class AccountService {
         return { verified: false };
       }
     } catch (e: unknown) {
-      return { verified: false, error: (e as Error).message };
+      return { verified: false, error: formatAwsSdkError(e) };
     }
   }
 
@@ -603,6 +604,35 @@ export class AccountService {
   }
 
   async ssoLogin(
+    id: string,
+    hooks?: {
+      onDeviceAuthorizationStarted?: (info: SsoDeviceAuthorizationStarted) => void;
+    },
+  ): Promise<{ accessExpiryUnchanged: boolean }> {
+    try {
+      return await this.ssoLoginOnce(id, hooks);
+    } catch (e: unknown) {
+      if (!isInvalidClientError(e)) {
+        throw e;
+      }
+      const row = this.repo().getById(id);
+      if (row?.authType !== 'sso') {
+        throw e;
+      }
+      const raw = this.secret().getSecret(row.secretKey);
+      const existing = raw ? parseSsoSecret(raw) : {};
+      const cleared: SsoSecretPayload = {
+        ...existing,
+        oidcClientId: undefined,
+        oidcClientSecret: undefined,
+        oidcRegistrationExpiresAt: undefined,
+      };
+      this.saveSsoSecret(row, cleared);
+      return this.ssoLoginOnce(id, hooks);
+    }
+  }
+
+  private async ssoLoginOnce(
     id: string,
     hooks?: {
       onDeviceAuthorizationStarted?: (info: SsoDeviceAuthorizationStarted) => void;
