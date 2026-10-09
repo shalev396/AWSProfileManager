@@ -31,6 +31,7 @@ aws cloudformation deploy \
     DomainName=downloads.example.com \
     HostedZoneId=Z0XXXXXXXX \
     CertificateArn=arn:aws:acm:us-east-1:ACCOUNT:certificate/ID \
+    WafWebAclArn= \
   --region us-east-1
 ```
 

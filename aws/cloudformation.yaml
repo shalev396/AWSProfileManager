@@ -23,6 +23,14 @@ Parameters:
     Type: String
     Description: ACM Certificate ARN for HTTPS (must be in us-east-1 region for CloudFront)
 
+  WafWebAclArn:
+    Type: String
+    Default: ''
+    Description: Shared WAF web ACL ARN. Empty means no WAF.
+
+Conditions:
+  HasWafWebAcl: !Not [!Equals [!Ref WafWebAclArn, '']]
+
 Resources:
   # ================================
   # S3 BUCKETS CONFIGURATION
@@ -84,6 +92,9 @@ Resources:
         HttpVersion: http2and3
         PriceClass: PriceClass_100 # North America and Europe only (cost-effective)
         IPV6Enabled: true
+
+        # Shared WAF web ACL (optional)
+        WebACLId: !If [HasWafWebAcl, !Ref WafWebAclArn, !Ref AWS::NoValue]
 
         # Custom domain
         Aliases:
