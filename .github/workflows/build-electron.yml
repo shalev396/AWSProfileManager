@@ -94,16 +94,54 @@ jobs:
         working-directory: ./electron
         run: npm run build
 
+      # Import the Developer ID cert into our own keychain instead of passing it to
+      # electron-builder via CSC_LINK. electron-builder's temp keychain calls
+      # `set-key-partition-list -k <p12 password>` against a keychain with a random
+      # password, which macOS 26+ rejects ("SecKeychainUnlock: ... not correct").
+      # See docs/macos-signing-and-notarization.md.
+      - name: Import Apple signing certificate
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      # APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD are intentionally NOT passed here:
+      # on macOS the identity comes from the keychain imported above (CSC_NAME).
       - name: Package & publish to GitHub Release
         working-directory: ./electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          CSC_NAME: "Shalev Ben Moshe (S2XPRR59CJ)"
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx electron-builder --config electron-builder.cjs --publish always
+
+      - name: Verify macOS signature & notarization
+        if: runner.os == 'macOS'
+        working-directory: ./electron
+        run: |
+          APP="$(find dist -maxdepth 2 -name '*.app' -type d | head -n1)"
+          DMG="$(find dist -maxdepth 1 -name '*.dmg' | head -n1)"
+          echo "App: $APP"
+          echo "DMG: $DMG"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv --verbose=2 "$APP" 2>&1 | grep -E "Authority|TeamIdentifier|Timestamp"
+          spctl -a -vvv -t exec "$APP"
+          xcrun stapler validate "$APP"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
